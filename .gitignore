@@ -55,3 +55,23 @@ CodeCoverage/
 *.VisualState.xml
 TestResult.xml
 nunit-*.xml
+
+# Entornos virtuales
+venv/
+env/
+.venv/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+
+# Variables de entorno y secretos (REGLA ESTRICTA DE LA WIKI)
+.env
+
+# Archivos del sistema operativo y editores
+.DS_Store
+.vscode/
+.idea/

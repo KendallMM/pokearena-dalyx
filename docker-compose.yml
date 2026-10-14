@@ -1,0 +1,32 @@
+services:
+  api:
+    build: ./backend
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend:/app
+    depends_on:
+      - postgres
+      - mongodb
+      - redis
+    env_file:
+      - .env
+
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: poke_user
+      POSTGRES_PASSWORD: poke_password
+      POSTGRES_DB: pokearena_db
+    ports:
+      - "5432:5432"
+
+  mongodb:
+    image: mongo:6.0
+    ports:
+      - "27017:27017"
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
