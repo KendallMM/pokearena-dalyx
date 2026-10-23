@@ -1,4 +1,5 @@
 from pydantic import BaseModel, Field
+from typing import List, Optional
 
 class CartaCreate(BaseModel):
     """Modelo para validar la creación de una carta."""
@@ -9,3 +10,22 @@ class CartaCreate(BaseModel):
     tipo: str = Field(..., min_length=1, description="Clasificación elemental")
     rareza: str = Field(..., min_length=1, description="Nivel de escasez")
     habilidad: str = Field(..., description="Código de habilidad (ej. HAB-000)")
+
+class CartaOut(BaseModel):
+    codigo: str
+    nombre: str
+    costo: int
+    poder: int
+    tipo: str
+    rareza: str
+    habilidad: str
+    estado: str
+
+    class Config:
+        from_attributes = True
+
+class PaginatedCartas(BaseModel):
+    resultados: List[CartaOut]
+    limit: int
+    next_cursor: Optional[int]
+    count: int
