@@ -4,3 +4,6 @@ pydantic
 sqlalchemy[asyncio]
 asyncpg
 redis
+pillow
+python-multipart
+motor
