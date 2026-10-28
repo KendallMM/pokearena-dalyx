@@ -1,8 +1,21 @@
-from pydantic import BaseModel, Field
+"""Modelos de respuesta de la API de ubicaciones."""
 
-class UbicacionBase(BaseModel):
-    nombre: str = Field(..., min_length=1, max_length=100)
-    descripcion: str = Field(..., min_length=1, max_length=255)
-    efecto: str = Field(...)
-    cupo: int = Field(..., ge=0, le=5)
-    energia: str = Field(...)
+from pydantic import BaseModel
+
+# ======================================================================
+# Ubicaciones
+# ======================================================================
+
+
+class LocationCreationResponse(BaseModel):
+    id: int
+    version: int
+    status: str
+    status_url: str
+
+
+class LocationStatusResponse(BaseModel):
+    id: int
+    version: int
+    status: str
+    image_processing: str | None

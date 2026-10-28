@@ -4,29 +4,53 @@ services:
     ports:
       - "8000:8000"
     volumes:
-      - ./backend:/app
-    depends_on:
-      - postgres
-      - mongodb
-      - redis
-    env_file:
-      - .env
-
-  postgres:
-    image: postgres:15-alpine
+      - ./backend:/app # desarrollo: el código del host se ve dentro del contenedor
     environment:
-      POSTGRES_USER: poke_user
-      POSTGRES_PASSWORD: poke_password
-      POSTGRES_DB: pokearena_db
-    ports:
-      - "5432:5432"
+      DATABASE_URL: mysql+aiomysql://${MYSQL_USER}:${MYSQL_PASSWORD}@mysql:3306/${MYSQL_DATABASE}?charset=utf8mb4
+      MONGO_URL: mongodb://mongodb:27017
+      MONGO_DB_NAME: ${MONGO_DB_NAME}
+      JWT_SECRET: ${JWT_SECRET}
+      CURSOR_SECRET: ${CURSOR_SECRET}
+      JWT_ISSUER: ${JWT_ISSUER:-}
+      JWT_AUDIENCE: ${JWT_AUDIENCE:-}
+      IMAGE_MAX_ATTEMPTS: ${IMAGE_MAX_ATTEMPTS:-5}
+      IMAGE_WORKER_POLL_SECONDS: ${IMAGE_WORKER_POLL_SECONDS:-5}
+      TEMPORARY_IMAGE_TTL_SECONDS: ${TEMPORARY_IMAGE_TTL_SECONDS:-3600}
+    depends_on:
+      mysql:
+        condition: service_healthy
+      mongodb:
+        condition: service_healthy
+    restart: unless-stopped
+
+  mysql:
+    image: mysql:8.0
+    command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p$$MYSQL_ROOT_PASSWORD --silent"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
 
   mongodb:
     image: mongo:6.0
-    ports:
-      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
 
-  redis:
-    image: redis:7-alpine
-    ports:
-      - "6379:6379"
+volumes:
+  mysql_data:
+  mongo_data:
