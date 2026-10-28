@@ -1,31 +1,77 @@
-from pydantic import BaseModel, Field
-from typing import List, Optional
+"""Modelos de respuesta de la API de cartas (y formato de error común)."""
 
-class CartaCreate(BaseModel):
-    """Modelo para validar la creación de una carta."""
-    nombre: str = Field(..., min_length=1, max_length=100)
-    imagen: str 
-    costo: int = Field(..., ge=0, le=10, description="Energía entre 0 y 10")
-    poder: int = Field(..., ge=-20, le=20, description="Poder entre -20 y 20")
-    tipo: str = Field(..., min_length=1, description="Clasificación elemental")
-    rareza: str = Field(..., min_length=1, description="Nivel de escasez")
-    habilidad: str = Field(..., description="Código de habilidad (ej. HAB-000)")
+from typing import Any
 
-class CartaOut(BaseModel):
-    codigo: str
-    nombre: str
-    costo: int
-    poder: int
-    tipo: str
-    rareza: str
-    habilidad: str
-    estado: str
+from pydantic import BaseModel
 
-    class Config:
-        from_attributes = True
+# ======================================================================
+# Formato de error
+# ======================================================================
 
-class PaginatedCartas(BaseModel):
-    resultados: List[CartaOut]
-    limit: int
-    next_cursor: Optional[int]
-    count: int
+
+class ErrorDetail(BaseModel):
+    code: str
+    message: str
+    field: str | None = None
+    details: dict[str, Any] | None = None
+
+
+class ErrorResponse(BaseModel):
+    error: ErrorDetail
+
+
+# ======================================================================
+# Cartas
+# ======================================================================
+
+
+class CardCreationResponse(BaseModel):
+    code: str
+    status: str
+    status_url: str
+
+
+class CardAbilityOut(BaseModel):
+    code: str
+    name: str
+    trigger_type: str | None
+    condition_type: str | None
+    effect_type: str | None
+    target_type: str | None
+    affected_type: str | None
+    parameters: dict[str, Any]
+
+
+class CardImageLinks(BaseModel):
+    large: str
+    small: str
+
+
+class CardSummary(BaseModel):
+    code: str
+    name: str
+    cost: int
+    power: int
+    type: str
+    rarity: str
+    status: str
+    ability: CardAbilityOut
+    image: CardImageLinks | None
+
+
+class CardSearchResponse(BaseModel):
+    items: list[CardSummary]
+    next_cursor: str | None
+    has_more: bool
+
+
+class CardStatusAbility(BaseModel):
+    code: str
+    affected_type: str | None
+
+
+class CardStatusResponse(BaseModel):
+    code: str
+    status: str
+    image_processing: str | None
+    ability: CardStatusAbility
