@@ -1,1 +1,1 @@
-"""Procesamiento de imágenes: solo valida y redimensiona. No guarda."""
+"""Procesamiento de imágenes: módulo propio. Solo valida y redimensiona; no guarda."""
