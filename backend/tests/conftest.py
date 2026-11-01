@@ -15,7 +15,8 @@ from app.api.gateway.idempotency import IdempotencyContext, idempotency_context
 from app.composition import Container
 from app.config.settings import Settings
 from app.main import create_app
-from tests.fakes import InMemoryIdempotencyStore
+from app.business.catalog.references.reference_service import ReferenceService
+from tests.fakes import FakeReferenceRepository, InMemoryIdempotencyStore
 
 SECRET = "clave-de-prueba-de-al-menos-32-caracteres!!"
 
@@ -56,6 +57,11 @@ def validator(settings: Settings) -> TokenValidator:
 
 
 @pytest.fixture
+def reference_repository() -> FakeReferenceRepository:
+    return FakeReferenceRepository()
+
+
+@pytest.fixture
 def store() -> InMemoryIdempotencyStore:
     return InMemoryIdempotencyStore()
 
@@ -75,10 +81,13 @@ def client(
     settings: Settings,
     validator: TokenValidator,
     store: InMemoryIdempotencyStore,
+    reference_repository: FakeReferenceRepository,
     handler_calls: list[str],
 ) -> TestClient:
     """Aplicación real con un endpoint de prueba protegido por el gateway."""
-    app = create_app(Container(settings, validator, store))
+    app = create_app(
+        Container(settings, validator, store, ReferenceService(reference_repository))
+    )
 
     @app.post("/test/things", status_code=202, responses=ADMIN_ERROR_RESPONSES)
     def create_thing(

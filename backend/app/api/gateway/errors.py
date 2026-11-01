@@ -29,10 +29,13 @@ class ErrorResponse(BaseModel):
 
 
 # Respuestas de error que documenta OpenAPI en los endpoints de administración.
-ADMIN_ERROR_RESPONSES: dict[int | str, dict[str, Any]] = {
-    400: {"model": ErrorResponse, "description": "Dato o requisito incumplido."},
+AUTH_ERROR_RESPONSES: dict[int | str, dict[str, Any]] = {
     401: {"model": ErrorResponse, "description": "Usuario no autenticado."},
     403: {"model": ErrorResponse, "description": "Usuario sin permiso."},
+}
+ADMIN_ERROR_RESPONSES: dict[int | str, dict[str, Any]] = {
+    400: {"model": ErrorResponse, "description": "Dato o requisito incumplido."},
+    **AUTH_ERROR_RESPONSES,
 }
 
 # El negocio no conoce HTTP: la traducción vive aquí.
