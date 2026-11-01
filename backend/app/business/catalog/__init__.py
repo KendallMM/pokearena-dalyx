@@ -1,1 +1,1 @@
-"""Módulo Catálogo: contenido, referencias, procesamiento de imágenes y búsqueda."""
+"""Módulo Catálogo: contenido, referencias y búsqueda."""

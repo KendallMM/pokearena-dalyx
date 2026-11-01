@@ -45,8 +45,7 @@ RULES: dict[str, set[str]] = {
 }
 
 # Pillow solo puede usarse en el módulo de Procesamiento de imágenes.
-IMAGE_LIBRARY_ONLY_IN = APP_DIR / "business" / "catalog" / "image_processing"
-
+IMAGE_LIBRARY_ONLY_IN = APP_DIR / "business" / "image_processing"
 
 def _imports(path: Path) -> set[str]:
     tree = ast.parse(path.read_text(encoding="utf-8"))
