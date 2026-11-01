@@ -25,6 +25,10 @@ class Settings(BaseSettings):
     jwt_audience: str = "pokearena-admin"
     jwt_expiration_minutes: int = 60
 
+    # Tiempo que se conserva la respuesta de una operación ya registrada.
+    idempotency_ttl_seconds: int = 86400
+    log_level: str = "INFO"
+
 
 @lru_cache
 def get_settings() -> Settings:

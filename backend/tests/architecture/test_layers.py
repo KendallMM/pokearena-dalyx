@@ -9,43 +9,23 @@ DB_AND_WEB_LIBRARIES = {"fastapi", "starlette", "sqlalchemy", "pymongo", "redis"
 
 # capa -> importaciones prohibidas (paquetes externos o internos "app.x")
 RULES: dict[str, set[str]] = {
-    "business": DB_AND_WEB_LIBRARIES
-    | {"app.api", "app.persistence", "app.security", "app.tasks", "app.config"},
-    "api": {
-        "sqlalchemy",
-        "pymongo",
-        "redis",
-        "jwt",
-        "PIL",
-        "app.persistence",
-        "app.tasks",
-    },
-    "persistence": {"fastapi", "starlette", "app.api", "app.tasks", "app.security"},
-    "security": {
-        "fastapi",
-        "starlette",
-        "sqlalchemy",
-        "pymongo",
-        "redis",
-        "app.api",
-        "app.business",
-        "app.persistence",
-        "app.tasks",
-    },
-    "tasks": {
-        "fastapi",
-        "starlette",
-        "sqlalchemy",
-        "pymongo",
-        "redis",
-        "jwt",
-        "app.api",
-        "app.persistence",
-    },
+    # La lógica define puertos; no conoce frameworks, bases de datos ni PyJWT.
+    "business": DB_AND_WEB_LIBRARIES | {"app.api", "app.persistence", "app.config"},
+    # La API solo habla con la lógica; nunca con la persistencia.
+    "api": {"sqlalchemy", "pymongo", "redis", "PIL", "app.persistence"},
+    # La persistencia implementa los puertos de la lógica; no conoce la API.
+    "persistence": {"fastapi", "starlette", "jwt", "app.api"},
+    # Transversal: cualquier capa la usa, así que no puede depender de ninguna.
+    "observability": DB_AND_WEB_LIBRARIES
+    | {"app.api", "app.business", "app.persistence"},
 }
 
-# Pillow solo puede usarse en el módulo de Procesamiento de imágenes.
-IMAGE_LIBRARY_ONLY_IN = APP_DIR / "business" / "image_processing"
+# Librerías que solo pueden usarse en un lugar.
+ONLY_IN = {
+    "PIL": APP_DIR / "business" / "image_processing",  # Procesamiento de imágenes
+    "jwt": APP_DIR / "api" / "gateway",  # PyJWT solo en la frontera de la API
+}
+
 
 def _imports(path: Path) -> set[str]:
     tree = ast.parse(path.read_text(encoding="utf-8"))
@@ -75,11 +55,12 @@ def test_layers_respect_dependency_rules() -> None:
     assert not violations, "\n".join(violations)
 
 
-def test_image_library_only_in_image_processing() -> None:
+def test_restricted_libraries_stay_in_their_module() -> None:
     violations = []
-    for path in APP_DIR.rglob("*.py"):
-        if IMAGE_LIBRARY_ONLY_IN in path.parents:
-            continue
-        if any(_matches(m, "PIL") for m in _imports(path)):
-            violations.append(str(path.relative_to(APP_DIR)))
+    for library, allowed_dir in ONLY_IN.items():
+        for path in APP_DIR.rglob("*.py"):
+            if allowed_dir in path.parents:
+                continue
+            if any(_matches(m, library) for m in _imports(path)):
+                violations.append(f"{path.relative_to(APP_DIR)} importa {library}")
     assert not violations, "\n".join(violations)
