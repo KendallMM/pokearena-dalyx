@@ -28,3 +28,9 @@ class ValidationFailedError(DomainError):
     """Un dato no cumple un requisito. Indica el campo afectado."""
 
     code = "validation_failed"
+
+
+class ConflictError(DomainError):
+    """La operación choca con el estado actual (por ejemplo, un recurso agotado)."""
+
+    code = "conflict"

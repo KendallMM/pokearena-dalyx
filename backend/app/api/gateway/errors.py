@@ -10,6 +10,7 @@ from pydantic import BaseModel
 
 from app.api.gateway.correlation import CORRELATION_HEADER
 from app.business.shared.errors import (
+    ConflictError,
     DomainError,
     NotAuthenticatedError,
     PermissionDeniedError,
@@ -37,12 +38,19 @@ ADMIN_ERROR_RESPONSES: dict[int | str, dict[str, Any]] = {
     400: {"model": ErrorResponse, "description": "Dato o requisito incumplido."},
     **AUTH_ERROR_RESPONSES,
 }
+CONFLICT_RESPONSE: dict[int | str, dict[str, Any]] = {
+    409: {
+        "model": ErrorResponse,
+        "description": "La operación choca con el estado actual.",
+    },
+}
 
 # El negocio no conoce HTTP: la traducción vive aquí.
 STATUS_BY_ERROR: list[tuple[type[DomainError], int]] = [
     (NotAuthenticatedError, 401),
     (PermissionDeniedError, 403),
     (ValidationFailedError, 400),
+    (ConflictError, 409),
 ]
 
 

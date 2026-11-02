@@ -21,7 +21,8 @@ def alembic_config(url: str) -> Config:
 
 @pytest.fixture
 def database_url(tmp_path: Path) -> str:
-    return f"sqlite:///{tmp_path / 'test.db'}"
+    # El timeout evita "database is locked" cuando varios hilos escriben a la vez.
+    return f"sqlite:///{tmp_path / 'test.db'}?timeout=30"
 
 
 @pytest.fixture

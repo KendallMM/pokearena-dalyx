@@ -15,8 +15,15 @@ from app.api.gateway.idempotency import IdempotencyContext, idempotency_context
 from app.composition import Container
 from app.config.settings import Settings
 from app.main import create_app
+from app.business.catalog.content.cards.card_service import CardService
 from app.business.catalog.references.reference_service import ReferenceService
-from tests.fakes import FakeReferenceRepository, InMemoryIdempotencyStore
+from app.business.image_processing.image_processor import ImageProcessor
+from tests.fakes import (
+    FakeCardRepository,
+    FakeImageStore,
+    FakeReferenceRepository,
+    InMemoryIdempotencyStore,
+)
 
 SECRET = "clave-de-prueba-de-al-menos-32-caracteres!!"
 
@@ -62,6 +69,35 @@ def reference_repository() -> FakeReferenceRepository:
 
 
 @pytest.fixture
+def events() -> list[str]:
+    return []
+
+
+@pytest.fixture
+def image_store(events: list[str]) -> FakeImageStore:
+    return FakeImageStore(events)
+
+
+@pytest.fixture
+def card_repository(events: list[str]) -> FakeCardRepository:
+    return FakeCardRepository(events)
+
+
+@pytest.fixture
+def card_service(
+    reference_repository: FakeReferenceRepository,
+    image_store: FakeImageStore,
+    card_repository: FakeCardRepository,
+) -> CardService:
+    return CardService(
+        references=ReferenceService(reference_repository),
+        image_processor=ImageProcessor(),
+        image_store=image_store,
+        cards=card_repository,
+    )
+
+
+@pytest.fixture
 def store() -> InMemoryIdempotencyStore:
     return InMemoryIdempotencyStore()
 
@@ -82,11 +118,18 @@ def client(
     validator: TokenValidator,
     store: InMemoryIdempotencyStore,
     reference_repository: FakeReferenceRepository,
+    card_service: CardService,
     handler_calls: list[str],
 ) -> TestClient:
     """Aplicación real con un endpoint de prueba protegido por el gateway."""
     app = create_app(
-        Container(settings, validator, store, ReferenceService(reference_repository))
+        Container(
+            settings,
+            validator,
+            store,
+            ReferenceService(reference_repository),
+            card_service,
+        )
     )
 
     @app.post("/test/things", status_code=202, responses=ADMIN_ERROR_RESPONSES)
