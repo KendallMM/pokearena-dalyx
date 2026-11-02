@@ -36,6 +36,8 @@ class NewCard:
     ability: str
     image_id: str
     status: CardStatus
+    # Nombre sin tildes ni mayúsculas, que usa la búsqueda.
+    search_name: str
 
 
 @dataclass(frozen=True)

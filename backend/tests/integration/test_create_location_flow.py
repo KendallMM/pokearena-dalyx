@@ -19,6 +19,7 @@ from app.persistence.relational.card_repository import SqlCardRepository
 from app.persistence.relational.location_repository import SqlLocationRepository
 from app.persistence.relational.models import LocationRow
 from app.persistence.relational.reference_repository import SqlReferenceRepository
+from tests.builders import real_search_service
 from tests.fakes import InMemoryIdempotencyStore
 from tests.integration.test_create_location_endpoint import FORM, _post
 from tests.unit.image_helpers import make_image
@@ -50,6 +51,7 @@ def _build(settings, validator, session_factory):
             references,
             cards,
             locations,
+            real_search_service(session_factory, images, references),
         )
     )
     return TestClient(app), locations, images

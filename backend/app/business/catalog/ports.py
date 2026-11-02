@@ -10,6 +10,7 @@ from app.business.catalog.content.locations.models import (
     PendingLocation,
     StoredLocation,
 )
+from app.business.catalog.search.models import CardCriteria, CardSummary
 from app.business.catalog.references.models import (
     Ability,
     CardType,
@@ -63,6 +64,21 @@ class CardRepository(Protocol):
         self, card_id: int, error: str, retry_at: datetime
     ) -> None:
         """Deja la carta pendiente, guarda el error y la libera para reintentar."""
+        ...
+
+
+class CardSearchRepository(Protocol):
+    """Consulta de cartas para la búsqueda."""
+
+    def search(
+        self, criteria: CardCriteria, after_id: int, limit: int
+    ) -> list[CardSummary]:
+        """Cartas que cumplen todos los criterios activos, con id mayor a after_id,
+        ordenadas por id y con un máximo de limit."""
+        ...
+
+    def find_image_id(self, code: str) -> str | None:
+        """Identificador de la imagen de la carta, o None si la carta no existe."""
         ...
 
 

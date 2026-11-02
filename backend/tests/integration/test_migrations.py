@@ -52,3 +52,32 @@ def test_location_catalog_is_seeded_and_locations_table_enforces_ranges(
         except IntegrityError:
             continue
         raise AssertionError(f"La base aceptó un valor inválido: {bad}")
+
+
+def test_search_name_is_added_and_backfilled_for_existing_cards(database_url) -> None:
+    from sqlalchemy import text
+
+    config = alembic_config(database_url)
+    command.upgrade(config, "0004")
+    engine = create_engine(database_url)
+    with engine.begin() as connection:
+        connection.execute(
+            text(
+                "INSERT INTO cards (code, name, cost, power, card_type_id, rarity_id, "
+                "ability_id, image_id, status) VALUES ('PKA-PSI-001', 'Psíquico  Ñandú', "
+                "1, 1, 5, 1, 1, 'x', 'available')"
+            )
+        )
+
+    command.upgrade(config, "head")
+    with engine.begin() as connection:
+        assert (
+            connection.execute(text("SELECT search_name FROM cards")).scalar()
+            == "psiquico nandu"
+        )
+
+    command.downgrade(config, "0004")
+    columns = {
+        c["name"] for c in inspect(create_engine(database_url)).get_columns("cards")
+    }
+    assert "search_name" not in columns
