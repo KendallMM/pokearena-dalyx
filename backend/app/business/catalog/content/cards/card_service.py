@@ -19,6 +19,7 @@ from app.business.catalog.thumbnails import (
 )
 from app.business.image_processing.image_processor import ImageProcessor
 from app.business.shared.ports import Clock
+from app.business.shared.text import normalize_for_search
 
 logger = logging.getLogger(__name__)
 
@@ -72,6 +73,7 @@ class CardService:
                     ability=command.ability,
                     image_id=image_id,
                     status=CardStatus.PENDING_THUMBNAIL,
+                    search_name=normalize_for_search(command.name),
                 )
             )
         except Exception:

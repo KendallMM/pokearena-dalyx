@@ -16,6 +16,7 @@ from app.persistence.relational.card_repository import SqlCardRepository
 from app.persistence.relational.location_repository import SqlLocationRepository
 from app.persistence.relational.models import CardRow
 from app.persistence.relational.reference_repository import SqlReferenceRepository
+from tests.builders import real_search_service
 from tests.fakes import InMemoryIdempotencyStore
 from tests.integration.test_create_card_endpoint import FORM, _post
 
@@ -50,6 +51,7 @@ def test_create_cards_end_to_end(
             references,
             service,
             _locations(session_factory, images, references),
+            real_search_service(session_factory, images, references),
         )
     )
     client = TestClient(app)
@@ -102,6 +104,7 @@ def test_created_cards_become_available_after_the_thumbnail_task(
                 references,
                 service,
                 _locations(session_factory, images, references),
+                real_search_service(session_factory, images, references),
             )
         )
     )

@@ -18,9 +18,11 @@ from app.main import create_app
 from app.business.catalog.content.cards.card_service import CardService
 from app.business.catalog.content.locations.location_service import LocationService
 from app.business.catalog.references.reference_service import ReferenceService
+from app.business.catalog.search.card_search_service import CardSearchService
 from app.business.image_processing.image_processor import ImageProcessor
 from tests.fakes import (
     FakeCardRepository,
+    FakeCardSearchRepository,
     FakeClock,
     FakeImageStore,
     FakeLocationRepository,
@@ -92,6 +94,11 @@ def location_repository(events: list[str]) -> FakeLocationRepository:
 
 
 @pytest.fixture
+def card_search_repository() -> FakeCardSearchRepository:
+    return FakeCardSearchRepository()
+
+
+@pytest.fixture
 def clock() -> FakeClock:
     return FakeClock()
 
@@ -129,6 +136,19 @@ def location_service(
 
 
 @pytest.fixture
+def card_search_service(
+    reference_repository: FakeReferenceRepository,
+    card_search_repository: FakeCardSearchRepository,
+    image_store: FakeImageStore,
+) -> CardSearchService:
+    return CardSearchService(
+        references=ReferenceService(reference_repository),
+        cards=card_search_repository,
+        image_store=image_store,
+    )
+
+
+@pytest.fixture
 def store() -> InMemoryIdempotencyStore:
     return InMemoryIdempotencyStore()
 
@@ -151,6 +171,7 @@ def client(
     reference_repository: FakeReferenceRepository,
     card_service: CardService,
     location_service: LocationService,
+    card_search_service: CardSearchService,
     handler_calls: list[str],
 ) -> TestClient:
     """Aplicación real con un endpoint de prueba protegido por el gateway."""
@@ -162,6 +183,7 @@ def client(
             ReferenceService(reference_repository),
             card_service,
             location_service,
+            card_search_service,
         )
     )
 

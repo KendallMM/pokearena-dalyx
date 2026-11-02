@@ -11,6 +11,7 @@ from app.business.automatic_tasks.thumbnail_job import ThumbnailJob
 from app.business.catalog.content.cards.card_service import CardService
 from app.business.catalog.content.locations.location_service import LocationService
 from app.business.catalog.references.reference_service import ReferenceService
+from app.business.catalog.search.card_search_service import CardSearchService
 from app.business.catalog.thumbnails import ThumbnailPolicy
 from app.business.image_processing.image_processor import ImageProcessor
 from app.business.shared.ports import IdempotencyStore
@@ -19,6 +20,7 @@ from app.persistence.cache.repeated_requests import RedisIdempotencyStore
 from app.persistence.documents.image_repository import MongoImageStore
 from app.persistence.integrations.system_clock import SystemClock
 from app.persistence.relational.card_repository import SqlCardRepository
+from app.persistence.relational.card_search_repository import SqlCardSearchRepository
 from app.persistence.relational.database import build_session_factory
 from app.persistence.relational.location_repository import SqlLocationRepository
 from app.persistence.relational.reference_repository import SqlReferenceRepository
@@ -34,6 +36,7 @@ class Container:
     reference_service: ReferenceService
     card_service: CardService
     location_service: LocationService
+    card_search_service: CardSearchService
     scheduler: Scheduler | None = None
 
 
@@ -65,6 +68,11 @@ def build_container(settings: Settings) -> Container:
         clock=clock,
         thumbnail_policy=thumbnail_policy,
     )
+    card_search_service = CardSearchService(
+        references=reference_service,
+        cards=SqlCardSearchRepository(session_factory),
+        image_store=image_store,
+    )
     scheduler = (
         Scheduler(
             [
@@ -90,5 +98,6 @@ def build_container(settings: Settings) -> Container:
         reference_service=reference_service,
         card_service=card_service,
         location_service=location_service,
+        card_search_service=card_search_service,
         scheduler=scheduler,
     )

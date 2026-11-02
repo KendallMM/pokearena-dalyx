@@ -29,6 +29,7 @@ def _container(
     reference_repository,
     card_service,
     location_service,
+    card_search_service,
     job,
 ):
     return Container(
@@ -38,12 +39,19 @@ def _container(
         ReferenceService(reference_repository),
         card_service,
         location_service,
+        card_search_service,
         scheduler=Scheduler([job], interval_seconds=0.01),
     )
 
 
 def test_scheduler_runs_while_the_app_is_up_and_stops_on_shutdown(
-    settings, validator, store, reference_repository, card_service, location_service
+    settings,
+    validator,
+    store,
+    reference_repository,
+    card_service,
+    location_service,
+    card_search_service,
 ) -> None:
     job = SignalJob()
     app = create_app(
@@ -54,6 +62,7 @@ def test_scheduler_runs_while_the_app_is_up_and_stops_on_shutdown(
             reference_repository,
             card_service,
             location_service,
+            card_search_service,
             job,
         )
     )
@@ -68,7 +77,13 @@ def test_scheduler_runs_while_the_app_is_up_and_stops_on_shutdown(
 
 
 def test_app_without_scheduler_starts_normally(
-    settings, validator, store, reference_repository, card_service, location_service
+    settings,
+    validator,
+    store,
+    reference_repository,
+    card_service,
+    location_service,
+    card_search_service,
 ) -> None:
     container = Container(
         settings,
@@ -77,6 +92,7 @@ def test_app_without_scheduler_starts_normally(
         ReferenceService(reference_repository),
         card_service,
         location_service,
+        card_search_service,
     )
     with TestClient(create_app(container)) as client:
         assert client.get("/health").status_code == 200

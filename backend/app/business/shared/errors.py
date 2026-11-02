@@ -34,3 +34,9 @@ class ConflictError(DomainError):
     """La operación choca con el estado actual (por ejemplo, un recurso agotado)."""
 
     code = "conflict"
+
+
+class NotFoundError(DomainError):
+    """El recurso pedido no existe."""
+
+    code = "not_found"

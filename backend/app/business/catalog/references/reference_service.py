@@ -44,6 +44,20 @@ class ReferenceService:
         if ability not in {a.code for a in references.abilities}:
             raise ValidationFailedError("La habilidad no existe.", field="ability")
 
+    def validate_optional_selection(
+        self, card_type: str | None, rarity: str | None, ability: str | None
+    ) -> None:
+        """Como validate_selection, pero cada valor es opcional (para filtrar)."""
+        references = self.get_references()
+        if card_type and card_type not in {t.code for t in references.card_types}:
+            raise ValidationFailedError(
+                "El tipo de carta no existe.", field="card_type"
+            )
+        if rarity and rarity not in {r.code for r in references.rarities}:
+            raise ValidationFailedError("La rareza no existe.", field="rarity")
+        if ability and ability not in {a.code for a in references.abilities}:
+            raise ValidationFailedError("La habilidad no existe.", field="ability")
+
     def validate_location_effect(
         self, effect_type: str | None, parameters: dict[str, Any] | None
     ) -> dict[str, Any]:

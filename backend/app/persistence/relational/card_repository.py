@@ -35,6 +35,7 @@ class SqlCardRepository:
             row = CardRow(
                 code=code,
                 name=card.name,
+                search_name=card.search_name,
                 cost=card.cost,
                 power=card.power,
                 card_type_id=self._id_of(session, CardTypeRow, card.card_type),

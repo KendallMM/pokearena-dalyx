@@ -223,3 +223,19 @@ class FakeLocationRepository:
         row["attempts"] += 1
         row["last_error"] = error
         row["claimed_until"] = retry_at
+
+
+class FakeCardSearchRepository:
+    """Búsqueda en memoria: devuelve lo que se le configure y anota cómo la llamaron."""
+
+    def __init__(self) -> None:
+        self.results: list = []
+        self.calls: list[tuple] = []
+        self.image_ids: dict[str, str] = {}
+
+    def search(self, criteria, after_id, limit):
+        self.calls.append((criteria, after_id, limit))
+        return [card for card in self.results if card.id > after_id][:limit]
+
+    def find_image_id(self, code):
+        return self.image_ids.get(code)

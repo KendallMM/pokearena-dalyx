@@ -22,6 +22,7 @@ def _card(card_type="FUE", ability="HAB-000", name="Charmander") -> NewCard:
         ability=ability,
         image_id="abc123",
         status=CardStatus.PENDING_THUMBNAIL,
+        search_name=name.lower(),
     )
 
 

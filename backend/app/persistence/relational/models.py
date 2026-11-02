@@ -62,6 +62,8 @@ class CardRow(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     code: Mapped[str] = mapped_column(String(12), unique=True)
     name: Mapped[str] = mapped_column(String(100))
+    # Nombre sin tildes ni mayúsculas, para buscar por coincidencia parcial.
+    search_name: Mapped[str] = mapped_column(String(100), server_default=text("''"))
     cost: Mapped[int]
     power: Mapped[int]
     card_type_id: Mapped[int] = mapped_column(ForeignKey("card_types.id"))

@@ -13,6 +13,7 @@ from app.business.shared.errors import (
     ConflictError,
     DomainError,
     NotAuthenticatedError,
+    NotFoundError,
     PermissionDeniedError,
     ValidationFailedError,
 )
@@ -45,11 +46,16 @@ CONFLICT_RESPONSE: dict[int | str, dict[str, Any]] = {
     },
 }
 
+NOT_FOUND_RESPONSE: dict[int | str, dict[str, Any]] = {
+    404: {"model": ErrorResponse, "description": "El recurso no existe."},
+}
+
 # El negocio no conoce HTTP: la traducción vive aquí.
 STATUS_BY_ERROR: list[tuple[type[DomainError], int]] = [
     (NotAuthenticatedError, 401),
     (PermissionDeniedError, 403),
     (ValidationFailedError, 400),
+    (NotFoundError, 404),
     (ConflictError, 409),
 ]
 
