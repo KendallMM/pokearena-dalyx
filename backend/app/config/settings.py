@@ -29,6 +29,16 @@ class Settings(BaseSettings):
     idempotency_ttl_seconds: int = 86400
     log_level: str = "INFO"
 
+    # Tarea automática de miniaturas (ADR-002). Los valores finales los fija el ADR
+    # de tareas automáticas.
+    scheduler_enabled: bool = True
+    thumbnail_interval_seconds: float = 5
+    thumbnail_batch_size: int = 20
+    thumbnail_lease_seconds: int = (
+        120  # cuánto tiempo "reserva" una instancia una carta
+    )
+    thumbnail_retry_delay_seconds: int = 60  # espera antes de reintentar una carta
+
 
 @lru_cache
 def get_settings() -> Settings:

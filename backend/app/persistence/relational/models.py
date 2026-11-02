@@ -61,3 +61,7 @@ class CardRow(Base):
     image_id: Mapped[str] = mapped_column(String(36))
     status: Mapped[str] = mapped_column(String(30))
     created_at: Mapped[datetime] = mapped_column(DateTime(), server_default=func.now())
+    # Seguimiento de la generación de la versión pequeña (fechas en UTC).
+    thumbnail_attempts: Mapped[int] = mapped_column(server_default=text("0"))
+    thumbnail_last_error: Mapped[str | None] = mapped_column(String(500))
+    thumbnail_claimed_until: Mapped[datetime | None] = mapped_column(DateTime())

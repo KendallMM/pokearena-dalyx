@@ -1,6 +1,10 @@
 """Dobles de prueba para los puertos."""
 
+from datetime import datetime, timedelta, timezone
+
+from app.business.catalog.content.cards.models import CardStatus, PendingCard
 from app.business.catalog.references.models import Ability, CardType, Rarity
+from app.business.image_processing.models import StoredImage
 from app.business.shared.ports import StoredResponse
 
 
@@ -37,20 +41,46 @@ class FakeReferenceRepository:
         return list(self.abilities)
 
 
+class FakeClock:
+    """Reloj que se mueve a mano."""
+
+    def __init__(self) -> None:
+        self.current = datetime(2026, 11, 1, 12, 0, 0, tzinfo=timezone.utc)
+
+    def now(self) -> datetime:
+        return self.current
+
+    def advance(self, seconds: float) -> None:
+        self.current += timedelta(seconds=seconds)
+
+
 class FakeImageStore:
     """Almacén de imágenes en memoria. Registra el orden de las operaciones."""
 
     def __init__(self, events: list[str] | None = None) -> None:
         self.events = events if events is not None else []
         self.saved: dict[str, bytes] = {}
+        self.thumbnails: dict[str, object] = {}
         self.deleted: list[str] = []
         self.fail_delete = False
+        self.fail_read = False
+        self.fail_thumbnail_save = False
 
     def save_original(self, kind, data, info) -> str:
         image_id = f"img-{len(self.saved) + 1}"
         self.saved[image_id] = data
         self.events.append("image_saved")
         return image_id
+
+    def read_original(self, image_id: str) -> StoredImage:
+        if self.fail_read:
+            raise RuntimeError("MongoDB no responde")
+        return StoredImage(data=self.saved[image_id], content_type="image/png")
+
+    def save_thumbnail(self, image_id: str, thumbnail) -> None:
+        if self.fail_thumbnail_save:
+            raise RuntimeError("no se pudo guardar la miniatura")
+        self.thumbnails[image_id] = thumbnail
 
     def delete(self, image_id: str) -> None:
         if self.fail_delete:
@@ -60,13 +90,15 @@ class FakeImageStore:
 
 
 class FakeCardRepository:
-    """Guarda cartas en memoria y asigna códigos por tipo, como lo hace MySQL."""
+    """Guarda cartas en memoria, asigna códigos y reserva pendientes como MySQL."""
 
     def __init__(self, events: list[str] | None = None) -> None:
         self.events = events if events is not None else []
         self.added: list = []
         self.fail_with: Exception | None = None
         self._counters: dict[str, int] = {}
+        # id -> estado de seguimiento
+        self.rows: dict[int, dict] = {}
 
     def add(self, card):
         from app.business.catalog.content.cards.card_code import build_card_code
@@ -77,7 +109,34 @@ class FakeCardRepository:
             raise self.fail_with
         self._counters[card.card_type] = self._counters.get(card.card_type, 0) + 1
         self.added.append(card)
-        return StoredCard(
-            code=build_card_code(card.card_type, self._counters[card.card_type]),
-            status=card.status,
-        )
+        code = build_card_code(card.card_type, self._counters[card.card_type])
+        self.rows[len(self.rows) + 1] = {
+            "code": code,
+            "image_id": card.image_id,
+            "status": card.status,
+            "claimed_until": None,
+            "attempts": 0,
+            "last_error": None,
+        }
+        return StoredCard(code=code, status=card.status)
+
+    def claim_pending_thumbnails(self, now, limit, lease_seconds):
+        claimed = []
+        for card_id, row in self.rows.items():
+            free = row["claimed_until"] is None or row["claimed_until"] <= now
+            if row["status"] is CardStatus.PENDING_THUMBNAIL and free:
+                row["claimed_until"] = now + timedelta(seconds=lease_seconds)
+                claimed.append(PendingCard(card_id, row["code"], row["image_id"]))
+            if len(claimed) == limit:
+                break
+        return claimed
+
+    def mark_available(self, card_id: int) -> None:
+        row = self.rows[card_id]
+        row.update(status=CardStatus.AVAILABLE, claimed_until=None, last_error=None)
+
+    def register_thumbnail_failure(self, card_id, error, retry_at) -> None:
+        row = self.rows[card_id]
+        row["attempts"] += 1
+        row["last_error"] = error
+        row["claimed_until"] = retry_at

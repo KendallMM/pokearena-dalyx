@@ -1,10 +1,17 @@
 """Repositorio de cartas sobre MySQL."""
 
-from sqlalchemy import select, update
+from datetime import datetime, timedelta, timezone
+
+from sqlalchemy import or_, select, update
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.business.catalog.content.cards.card_code import build_card_code
-from app.business.catalog.content.cards.models import CardStatus, NewCard, StoredCard
+from app.business.catalog.content.cards.models import (
+    CardStatus,
+    NewCard,
+    PendingCard,
+    StoredCard,
+)
 from app.persistence.relational.models import (
     AbilityRow,
     CardRow,
@@ -61,3 +68,74 @@ class SqlCardRepository:
         session: Session, model: type[CardTypeRow | RarityRow | AbilityRow], code: str
     ) -> int:
         return session.scalars(select(model.id).where(model.code == code)).one()
+
+    def claim_pending_thumbnails(
+        self, now: datetime, limit: int, lease_seconds: int
+    ) -> list[PendingCard]:
+        """Reserva cartas pendientes. Cada reserva es un UPDATE condicional: si otra
+        instancia ya la tomó, el UPDATE no cambia ninguna fila y se salta esa carta."""
+        now_utc = _naive_utc(now)
+        lease_until = now_utc + timedelta(seconds=lease_seconds)
+        free = or_(
+            CardRow.thumbnail_claimed_until.is_(None),
+            CardRow.thumbnail_claimed_until <= now_utc,
+        )
+        claimed: list[PendingCard] = []
+        with self._session_factory.begin() as session:
+            candidates = session.execute(
+                select(CardRow.id, CardRow.code, CardRow.image_id)
+                .where(CardRow.status == CardStatus.PENDING_THUMBNAIL.value, free)
+                .order_by(CardRow.id)
+                .limit(limit)
+            ).all()
+            for card_id, code, image_id in candidates:
+                result = session.execute(
+                    update(CardRow)
+                    .where(
+                        CardRow.id == card_id,
+                        CardRow.status == CardStatus.PENDING_THUMBNAIL.value,
+                        free,
+                    )
+                    .values(thumbnail_claimed_until=lease_until)
+                )
+                if result.rowcount == 1:
+                    claimed.append(
+                        PendingCard(id=card_id, code=code, image_id=image_id)
+                    )
+        return claimed
+
+    def mark_available(self, card_id: int) -> None:
+        with self._session_factory.begin() as session:
+            session.execute(
+                update(CardRow)
+                .where(
+                    CardRow.id == card_id,
+                    CardRow.status == CardStatus.PENDING_THUMBNAIL.value,
+                )
+                .values(
+                    status=CardStatus.AVAILABLE.value,
+                    thumbnail_claimed_until=None,
+                    thumbnail_last_error=None,
+                )
+            )
+
+    def register_thumbnail_failure(
+        self, card_id: int, error: str, retry_at: datetime
+    ) -> None:
+        with self._session_factory.begin() as session:
+            session.execute(
+                update(CardRow)
+                .where(CardRow.id == card_id)
+                .values(
+                    thumbnail_attempts=CardRow.thumbnail_attempts + 1,
+                    thumbnail_last_error=error[:500],
+                    thumbnail_claimed_until=_naive_utc(retry_at),
+                )
+            )
+
+
+def _naive_utc(value: datetime) -> datetime:
+    """MySQL guarda las fechas en UTC sin zona horaria."""
+    if value.tzinfo is None:
+        return value
+    return value.astimezone(timezone.utc).replace(tzinfo=None)

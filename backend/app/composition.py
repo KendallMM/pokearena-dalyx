@@ -6,13 +6,17 @@ from pymongo import MongoClient
 from redis import Redis
 
 from app.api.gateway.authentication import TokenValidator
+from app.business.automatic_tasks.scheduler import Scheduler
+from app.business.automatic_tasks.thumbnail_job import ThumbnailJob
 from app.business.catalog.content.cards.card_service import CardService
+from app.business.catalog.content.cards.models import ThumbnailPolicy
 from app.business.catalog.references.reference_service import ReferenceService
 from app.business.image_processing.image_processor import ImageProcessor
 from app.business.shared.ports import IdempotencyStore
 from app.config.settings import Settings
 from app.persistence.cache.repeated_requests import RedisIdempotencyStore
 from app.persistence.documents.image_repository import MongoImageStore
+from app.persistence.integrations.system_clock import SystemClock
 from app.persistence.relational.card_repository import SqlCardRepository
 from app.persistence.relational.database import build_session_factory
 from app.persistence.relational.reference_repository import SqlReferenceRepository
@@ -27,6 +31,7 @@ class Container:
     idempotency_store: IdempotencyStore
     reference_service: ReferenceService
     card_service: CardService
+    scheduler: Scheduler | None = None
 
 
 def build_container(settings: Settings) -> Container:
@@ -34,6 +39,23 @@ def build_container(settings: Settings) -> Container:
     session_factory = build_session_factory(settings.mysql_url)
     reference_service = ReferenceService(SqlReferenceRepository(session_factory))
     images = MongoClient(settings.mongo_url)[settings.mongo_database]["images"]
+    card_service = CardService(
+        references=reference_service,
+        image_processor=ImageProcessor(),
+        image_store=MongoImageStore(images),
+        cards=SqlCardRepository(session_factory),
+        clock=SystemClock(),
+        thumbnail_policy=ThumbnailPolicy(
+            batch_size=settings.thumbnail_batch_size,
+            lease_seconds=settings.thumbnail_lease_seconds,
+            retry_delay_seconds=settings.thumbnail_retry_delay_seconds,
+        ),
+    )
+    scheduler = (
+        Scheduler([ThumbnailJob(card_service)], settings.thumbnail_interval_seconds)
+        if settings.scheduler_enabled
+        else None
+    )
     return Container(
         settings=settings,
         token_validator=TokenValidator(
@@ -46,10 +68,6 @@ def build_container(settings: Settings) -> Container:
             Redis.from_url(settings.redis_url, decode_responses=True)
         ),
         reference_service=reference_service,
-        card_service=CardService(
-            references=reference_service,
-            image_processor=ImageProcessor(),
-            image_store=MongoImageStore(images),
-            cards=SqlCardRepository(session_factory),
-        ),
+        card_service=card_service,
+        scheduler=scheduler,
     )

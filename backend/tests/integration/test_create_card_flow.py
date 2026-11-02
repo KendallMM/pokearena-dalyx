@@ -10,6 +10,8 @@ from app.business.image_processing.image_processor import ImageProcessor
 from app.composition import Container
 from app.main import create_app
 from app.persistence.documents.image_repository import MongoImageStore
+from app.persistence.integrations.system_clock import SystemClock
+from app.persistence.integrations.system_clock import SystemClock
 from app.persistence.relational.card_repository import SqlCardRepository
 from app.persistence.relational.models import CardRow
 from app.persistence.relational.reference_repository import SqlReferenceRepository
@@ -27,6 +29,7 @@ def test_create_cards_end_to_end(
         ImageProcessor(),
         MongoImageStore(images),
         SqlCardRepository(session_factory),
+        SystemClock(),
     )
     app = create_app(
         Container(settings, validator, InMemoryIdempotencyStore(), references, service)
@@ -54,3 +57,50 @@ def test_create_cards_end_to_end(
     assert images.count_documents({}) == 3
     # cada carta apunta a su imagen guardada
     assert {r.image_id for r in rows} == {str(d["_id"]) for d in images.find()}
+
+
+def test_created_cards_become_available_after_the_thumbnail_task(
+    settings, validator, make_token, session_factory
+) -> None:
+    from io import BytesIO
+
+    from PIL import Image
+
+    images = mongomock.MongoClient().db["images"]
+    references = ReferenceService(SqlReferenceRepository(session_factory))
+    service = CardService(
+        references,
+        ImageProcessor(),
+        MongoImageStore(images),
+        SqlCardRepository(session_factory),
+        SystemClock(),
+    )
+    client = TestClient(
+        create_app(
+            Container(
+                settings, validator, InMemoryIdempotencyStore(), references, service
+            )
+        )
+    )
+    token = make_token()
+    _post(client, token, key="a")
+    _post(client, token, key="b")
+
+    with session_factory() as session:
+        assert {r.status for r in session.scalars(select(CardRow))} == {
+            "pending_thumbnail"
+        }
+
+    run = service.process_pending_thumbnails()
+    assert (run.processed, run.failed) == (2, 0)
+
+    with session_factory() as session:
+        rows = session.scalars(select(CardRow)).all()
+        assert {r.status for r in rows} == {"available"}
+        assert all(r.thumbnail_claimed_until is None for r in rows)
+    for document in images.find():
+        assert document["original"]["width"] == 600  # la original no se toca
+        with Image.open(BytesIO(bytes(document["thumbnail"]["data"]))) as thumbnail:
+            assert thumbnail.size == (200, 280)
+
+    assert service.process_pending_thumbnails().processed == 0

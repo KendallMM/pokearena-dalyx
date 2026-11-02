@@ -44,3 +44,29 @@ class StoredCard:
 
     code: str
     status: CardStatus
+
+
+@dataclass(frozen=True)
+class PendingCard:
+    """Carta reservada para generarle la versión pequeña."""
+
+    id: int
+    code: str
+    image_id: str
+
+
+@dataclass(frozen=True)
+class ThumbnailPolicy:
+    """Parámetros de la tarea de miniaturas. Los define el ADR de tareas automáticas."""
+
+    batch_size: int = 20
+    lease_seconds: int = 120
+    retry_delay_seconds: int = 60
+
+
+@dataclass(frozen=True)
+class ThumbnailRun:
+    """Resultado de una pasada de la tarea."""
+
+    processed: int
+    failed: int

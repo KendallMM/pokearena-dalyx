@@ -20,6 +20,7 @@ from app.business.catalog.references.reference_service import ReferenceService
 from app.business.image_processing.image_processor import ImageProcessor
 from tests.fakes import (
     FakeCardRepository,
+    FakeClock,
     FakeImageStore,
     FakeReferenceRepository,
     InMemoryIdempotencyStore,
@@ -84,16 +85,23 @@ def card_repository(events: list[str]) -> FakeCardRepository:
 
 
 @pytest.fixture
+def clock() -> FakeClock:
+    return FakeClock()
+
+
+@pytest.fixture
 def card_service(
     reference_repository: FakeReferenceRepository,
     image_store: FakeImageStore,
     card_repository: FakeCardRepository,
+    clock: FakeClock,
 ) -> CardService:
     return CardService(
         references=ReferenceService(reference_repository),
         image_processor=ImageProcessor(),
         image_store=image_store,
         cards=card_repository,
+        clock=clock,
     )
 
 

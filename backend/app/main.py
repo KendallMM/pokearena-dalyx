@@ -1,5 +1,8 @@
 """Punto de entrada de la API."""
 
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 
 from app.api.gateway.install import install_gateway
@@ -14,7 +17,18 @@ def create_app(container: Container | None = None) -> FastAPI:
     container = container or build_container(get_settings())
     configure_logging(container.settings.log_level)
 
-    app = FastAPI(title="PokeArena API", version="0.1.0")
+    @asynccontextmanager
+    async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
+        # El planificador corre en su propio hilo, aparte de las solicitudes.
+        if container.scheduler is not None:
+            container.scheduler.start()
+        try:
+            yield
+        finally:
+            if container.scheduler is not None:
+                container.scheduler.stop()
+
+    app = FastAPI(title="PokeArena API", version="0.1.0", lifespan=lifespan)
     app.state.settings = container.settings
     app.state.token_validator = container.token_validator
     app.state.idempotency_store = container.idempotency_store

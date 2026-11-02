@@ -43,3 +43,11 @@ class ProcessedImage:
     content_type: str
     width: int
     height: int
+
+
+@dataclass(frozen=True)
+class StoredImage:
+    """Imagen original leída del almacén."""
+
+    data: bytes
+    content_type: str
