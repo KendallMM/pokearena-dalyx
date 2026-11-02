@@ -36,6 +36,61 @@ def test_returns_grouped_references(client, make_token) -> None:
         "abilities": [
             {"code": "HAB-000", "name": "Sin Habilidad", "affected_card_type": None}
         ],
+        "location_effect_types": [
+            {
+                "code": "type_bonus",
+                "name": "Bonificación por tipo",
+                "parameters": [
+                    {
+                        "name": "card_type",
+                        "kind": "card_type",
+                        "required": True,
+                        "minimum": None,
+                        "maximum": None,
+                    },
+                    {
+                        "name": "amount",
+                        "kind": "integer",
+                        "required": True,
+                        "minimum": -5,
+                        "maximum": 5,
+                    },
+                ],
+            },
+            {
+                "code": "cost_modifier",
+                "name": "Modificador de costo",
+                "parameters": [
+                    {
+                        "name": "amount",
+                        "kind": "integer",
+                        "required": True,
+                        "minimum": -5,
+                        "maximum": 5,
+                    },
+                    {
+                        "name": "card_type",
+                        "kind": "card_type",
+                        "required": False,
+                        "minimum": None,
+                        "maximum": None,
+                    },
+                ],
+            },
+            {
+                "code": "turn_restriction",
+                "name": "Restricción por turno",
+                "parameters": [
+                    {
+                        "name": "turns",
+                        "kind": "integer_list",
+                        "required": True,
+                        "minimum": 1,
+                        "maximum": 6,
+                    }
+                ],
+            },
+        ],
     }
 
 

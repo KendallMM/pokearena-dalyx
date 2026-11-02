@@ -1,6 +1,6 @@
 """Repositorio de cartas sobre MySQL."""
 
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 
 from sqlalchemy import or_, select, update
 from sqlalchemy.orm import Session, sessionmaker
@@ -12,6 +12,7 @@ from app.business.catalog.content.cards.models import (
     PendingCard,
     StoredCard,
 )
+from app.persistence.relational.database import naive_utc
 from app.persistence.relational.models import (
     AbilityRow,
     CardRow,
@@ -74,7 +75,7 @@ class SqlCardRepository:
     ) -> list[PendingCard]:
         """Reserva cartas pendientes. Cada reserva es un UPDATE condicional: si otra
         instancia ya la tomó, el UPDATE no cambia ninguna fila y se salta esa carta."""
-        now_utc = _naive_utc(now)
+        now_utc = naive_utc(now)
         lease_until = now_utc + timedelta(seconds=lease_seconds)
         free = or_(
             CardRow.thumbnail_claimed_until.is_(None),
@@ -129,13 +130,6 @@ class SqlCardRepository:
                 .values(
                     thumbnail_attempts=CardRow.thumbnail_attempts + 1,
                     thumbnail_last_error=error[:500],
-                    thumbnail_claimed_until=_naive_utc(retry_at),
+                    thumbnail_claimed_until=naive_utc(retry_at),
                 )
             )
-
-
-def _naive_utc(value: datetime) -> datetime:
-    """MySQL guarda las fechas en UTC sin zona horaria."""
-    if value.tzinfo is None:
-        return value
-    return value.astimezone(timezone.utc).replace(tzinfo=None)

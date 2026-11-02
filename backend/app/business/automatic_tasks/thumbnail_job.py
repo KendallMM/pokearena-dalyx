@@ -1,25 +1,35 @@
-"""Trabajo en segundo plano: pide a Cartas generar las miniaturas pendientes."""
+"""Trabajo en segundo plano: pide generar las miniaturas pendientes."""
 
 import logging
+from typing import Protocol
 
-from app.business.catalog.content.cards.card_service import CardService
+from app.business.catalog.thumbnails import ThumbnailRun
 
 logger = logging.getLogger(__name__)
 
 
+class ThumbnailService(Protocol):
+    """Servicio de contenido que sabe generar sus propias miniaturas."""
+
+    def process_pending_thumbnails(self) -> ThumbnailRun: ...
+
+
 class ThumbnailJob:
-    """No cambia estados por su cuenta: pide la operación a Cartas, que aplica las reglas."""
+    """No cambia estados por su cuenta: pide la operación al servicio del contenido
+    (Cartas o Ubicaciones), que aplica las reglas."""
 
-    name = "card_thumbnails"
-
-    def __init__(self, card_service: CardService) -> None:
-        self._card_service = card_service
+    def __init__(
+        self, service: ThumbnailService, name: str = "card_thumbnails"
+    ) -> None:
+        self.name = name
+        self._service = service
 
     def run(self) -> None:
-        result = self._card_service.process_pending_thumbnails()
+        result = self._service.process_pending_thumbnails()
         if result.processed or result.failed:
             logger.info(
-                "Miniaturas de cartas: %s generadas, %s con error",
+                "Trabajo %s: %s generadas, %s con error",
+                self.name,
                 result.processed,
                 result.failed,
             )

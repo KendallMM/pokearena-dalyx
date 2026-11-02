@@ -7,9 +7,9 @@ from PIL import Image
 from app.business.catalog.content.cards.models import (
     CardStatus,
     CreateCard,
-    ThumbnailPolicy,
 )
 from app.business.catalog.content.cards.card_service import CardService
+from app.business.catalog.thumbnails import ThumbnailPolicy
 from app.business.image_processing.image_processor import ImageProcessor
 from tests.unit.image_helpers import make_image
 
