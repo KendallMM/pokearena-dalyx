@@ -9,8 +9,9 @@ from app.api.gateway.authentication import TokenValidator
 from app.business.automatic_tasks.scheduler import Scheduler
 from app.business.automatic_tasks.thumbnail_job import ThumbnailJob
 from app.business.catalog.content.cards.card_service import CardService
-from app.business.catalog.content.cards.models import ThumbnailPolicy
+from app.business.catalog.content.locations.location_service import LocationService
 from app.business.catalog.references.reference_service import ReferenceService
+from app.business.catalog.thumbnails import ThumbnailPolicy
 from app.business.image_processing.image_processor import ImageProcessor
 from app.business.shared.ports import IdempotencyStore
 from app.config.settings import Settings
@@ -19,6 +20,7 @@ from app.persistence.documents.image_repository import MongoImageStore
 from app.persistence.integrations.system_clock import SystemClock
 from app.persistence.relational.card_repository import SqlCardRepository
 from app.persistence.relational.database import build_session_factory
+from app.persistence.relational.location_repository import SqlLocationRepository
 from app.persistence.relational.reference_repository import SqlReferenceRepository
 
 
@@ -31,6 +33,7 @@ class Container:
     idempotency_store: IdempotencyStore
     reference_service: ReferenceService
     card_service: CardService
+    location_service: LocationService
     scheduler: Scheduler | None = None
 
 
@@ -39,20 +42,37 @@ def build_container(settings: Settings) -> Container:
     session_factory = build_session_factory(settings.mysql_url)
     reference_service = ReferenceService(SqlReferenceRepository(session_factory))
     images = MongoClient(settings.mongo_url)[settings.mongo_database]["images"]
+    image_store = MongoImageStore(images)
+    clock = SystemClock()
+    thumbnail_policy = ThumbnailPolicy(
+        batch_size=settings.thumbnail_batch_size,
+        lease_seconds=settings.thumbnail_lease_seconds,
+        retry_delay_seconds=settings.thumbnail_retry_delay_seconds,
+    )
     card_service = CardService(
         references=reference_service,
         image_processor=ImageProcessor(),
-        image_store=MongoImageStore(images),
+        image_store=image_store,
         cards=SqlCardRepository(session_factory),
-        clock=SystemClock(),
-        thumbnail_policy=ThumbnailPolicy(
-            batch_size=settings.thumbnail_batch_size,
-            lease_seconds=settings.thumbnail_lease_seconds,
-            retry_delay_seconds=settings.thumbnail_retry_delay_seconds,
-        ),
+        clock=clock,
+        thumbnail_policy=thumbnail_policy,
+    )
+    location_service = LocationService(
+        references=reference_service,
+        image_processor=ImageProcessor(),
+        image_store=image_store,
+        locations=SqlLocationRepository(session_factory),
+        clock=clock,
+        thumbnail_policy=thumbnail_policy,
     )
     scheduler = (
-        Scheduler([ThumbnailJob(card_service)], settings.thumbnail_interval_seconds)
+        Scheduler(
+            [
+                ThumbnailJob(card_service, "card_thumbnails"),
+                ThumbnailJob(location_service, "location_thumbnails"),
+            ],
+            settings.thumbnail_interval_seconds,
+        )
         if settings.scheduler_enabled
         else None
     )
@@ -69,5 +89,6 @@ def build_container(settings: Settings) -> Container:
         ),
         reference_service=reference_service,
         card_service=card_service,
+        location_service=location_service,
         scheduler=scheduler,
     )

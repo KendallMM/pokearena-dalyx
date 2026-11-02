@@ -5,18 +5,29 @@ from fastapi.testclient import TestClient
 from sqlalchemy import select
 
 from app.business.catalog.content.cards.card_service import CardService
+from app.business.catalog.content.locations.location_service import LocationService
 from app.business.catalog.references.reference_service import ReferenceService
 from app.business.image_processing.image_processor import ImageProcessor
 from app.composition import Container
 from app.main import create_app
 from app.persistence.documents.image_repository import MongoImageStore
 from app.persistence.integrations.system_clock import SystemClock
-from app.persistence.integrations.system_clock import SystemClock
 from app.persistence.relational.card_repository import SqlCardRepository
+from app.persistence.relational.location_repository import SqlLocationRepository
 from app.persistence.relational.models import CardRow
 from app.persistence.relational.reference_repository import SqlReferenceRepository
 from tests.fakes import InMemoryIdempotencyStore
 from tests.integration.test_create_card_endpoint import FORM, _post
+
+
+def _locations(session_factory, images, references) -> LocationService:
+    return LocationService(
+        references,
+        ImageProcessor(),
+        MongoImageStore(images),
+        SqlLocationRepository(session_factory),
+        SystemClock(),
+    )
 
 
 def test_create_cards_end_to_end(
@@ -32,7 +43,14 @@ def test_create_cards_end_to_end(
         SystemClock(),
     )
     app = create_app(
-        Container(settings, validator, InMemoryIdempotencyStore(), references, service)
+        Container(
+            settings,
+            validator,
+            InMemoryIdempotencyStore(),
+            references,
+            service,
+            _locations(session_factory, images, references),
+        )
     )
     client = TestClient(app)
     token = make_token()
@@ -78,7 +96,12 @@ def test_created_cards_become_available_after_the_thumbnail_task(
     client = TestClient(
         create_app(
             Container(
-                settings, validator, InMemoryIdempotencyStore(), references, service
+                settings,
+                validator,
+                InMemoryIdempotencyStore(),
+                references,
+                service,
+                _locations(session_factory, images, references),
             )
         )
     )

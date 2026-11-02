@@ -3,7 +3,18 @@
 from datetime import datetime, timedelta, timezone
 
 from app.business.catalog.content.cards.models import CardStatus, PendingCard
-from app.business.catalog.references.models import Ability, CardType, Rarity
+from app.business.catalog.content.locations.models import (
+    LocationStatus,
+    PendingLocation,
+    StoredLocation,
+)
+from app.business.catalog.references.models import (
+    Ability,
+    CardType,
+    EffectParameter,
+    LocationEffectType,
+    Rarity,
+)
 from app.business.image_processing.models import StoredImage
 from app.business.shared.ports import StoredResponse
 
@@ -30,6 +41,29 @@ class FakeReferenceRepository:
         self.card_types = [CardType("FUE", "Fuego"), CardType("AGU", "Agua")]
         self.rarities = [Rarity("COMMON", "Común"), Rarity("RARE", "Rara")]
         self.abilities = [Ability("HAB-000", "Sin Habilidad", None)]
+        self.location_effect_types = [
+            LocationEffectType(
+                "type_bonus",
+                "Bonificación por tipo",
+                [
+                    EffectParameter("card_type", "card_type", True),
+                    EffectParameter("amount", "integer", True, -5, 5),
+                ],
+            ),
+            LocationEffectType(
+                "cost_modifier",
+                "Modificador de costo",
+                [
+                    EffectParameter("amount", "integer", True, -5, 5),
+                    EffectParameter("card_type", "card_type", False),
+                ],
+            ),
+            LocationEffectType(
+                "turn_restriction",
+                "Restricción por turno",
+                [EffectParameter("turns", "integer_list", True, 1, 6)],
+            ),
+        ]
 
     def list_card_types(self) -> list[CardType]:
         return list(self.card_types)
@@ -39,6 +73,9 @@ class FakeReferenceRepository:
 
     def list_abilities(self) -> list[Ability]:
         return list(self.abilities)
+
+    def list_location_effect_types(self) -> list[LocationEffectType]:
+        return list(self.location_effect_types)
 
 
 class FakeClock:
@@ -137,6 +174,52 @@ class FakeCardRepository:
 
     def register_thumbnail_failure(self, card_id, error, retry_at) -> None:
         row = self.rows[card_id]
+        row["attempts"] += 1
+        row["last_error"] = error
+        row["claimed_until"] = retry_at
+
+
+class FakeLocationRepository:
+    """Guarda ubicaciones en memoria y reserva pendientes como MySQL."""
+
+    def __init__(self, events: list[str] | None = None) -> None:
+        self.events = events if events is not None else []
+        self.added: list = []
+        self.fail_with: Exception | None = None
+        self.rows: dict[int, dict] = {}
+
+    def add(self, location):
+        self.events.append("location_added")
+        if self.fail_with is not None:
+            raise self.fail_with
+        self.added.append(location)
+        location_id = len(self.rows) + 1
+        self.rows[location_id] = {
+            "image_id": location.image_id,
+            "status": location.status,
+            "claimed_until": None,
+            "attempts": 0,
+            "last_error": None,
+        }
+        return StoredLocation(id=location_id, status=location.status)
+
+    def claim_pending_thumbnails(self, now, limit, lease_seconds):
+        claimed = []
+        for location_id, row in self.rows.items():
+            free = row["claimed_until"] is None or row["claimed_until"] <= now
+            if row["status"] is LocationStatus.PENDING_THUMBNAIL and free:
+                row["claimed_until"] = now + timedelta(seconds=lease_seconds)
+                claimed.append(PendingLocation(location_id, row["image_id"]))
+            if len(claimed) == limit:
+                break
+        return claimed
+
+    def mark_available(self, location_id: int) -> None:
+        row = self.rows[location_id]
+        row.update(status=LocationStatus.AVAILABLE, claimed_until=None, last_error=None)
+
+    def register_thumbnail_failure(self, location_id, error, retry_at) -> None:
+        row = self.rows[location_id]
         row["attempts"] += 1
         row["last_error"] = error
         row["claimed_until"] = retry_at

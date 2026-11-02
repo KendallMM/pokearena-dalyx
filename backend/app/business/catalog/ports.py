@@ -5,7 +5,17 @@ from typing import Protocol
 from datetime import datetime
 
 from app.business.catalog.content.cards.models import NewCard, PendingCard, StoredCard
-from app.business.catalog.references.models import Ability, CardType, Rarity
+from app.business.catalog.content.locations.models import (
+    NewLocation,
+    PendingLocation,
+    StoredLocation,
+)
+from app.business.catalog.references.models import (
+    Ability,
+    CardType,
+    LocationEffectType,
+    Rarity,
+)
 from app.business.image_processing.models import ImageInfo, ProcessedImage, StoredImage
 
 
@@ -22,6 +32,10 @@ class ReferenceRepository(Protocol):
 
     def list_abilities(self) -> list[Ability]:
         """Habilidades existentes, ordenadas por código."""
+        ...
+
+    def list_location_effect_types(self) -> list[LocationEffectType]:
+        """Tipos de efecto de ubicación con los parámetros que exige cada uno."""
         ...
 
 
@@ -49,6 +63,31 @@ class CardRepository(Protocol):
         self, card_id: int, error: str, retry_at: datetime
     ) -> None:
         """Deja la carta pendiente, guarda el error y la libera para reintentar."""
+        ...
+
+
+class LocationRepository(Protocol):
+    """Guardado de ubicaciones."""
+
+    def add(self, location: NewLocation) -> StoredLocation:
+        """Guarda la ubicación y le asigna su identificador."""
+        ...
+
+    def claim_pending_thumbnails(
+        self, now: datetime, limit: int, lease_seconds: int
+    ) -> list[PendingLocation]:
+        """Consulta las ubicaciones pendientes de miniatura y las reserva por un
+        tiempo, de modo que dos instancias no procesen la misma a la vez."""
+        ...
+
+    def mark_available(self, location_id: int) -> None:
+        """Pasa la ubicación a Disponible. Solo afecta a ubicaciones pendientes."""
+        ...
+
+    def register_thumbnail_failure(
+        self, location_id: int, error: str, retry_at: datetime
+    ) -> None:
+        """Deja la ubicación pendiente, guarda el error y la libera para reintentar."""
         ...
 
 

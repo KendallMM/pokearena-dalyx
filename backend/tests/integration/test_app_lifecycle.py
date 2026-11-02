@@ -22,23 +22,40 @@ class SignalJob:
         self.started.set()
 
 
-def _container(settings, validator, store, reference_repository, card_service, job):
+def _container(
+    settings,
+    validator,
+    store,
+    reference_repository,
+    card_service,
+    location_service,
+    job,
+):
     return Container(
         settings,
         validator,
         store,
         ReferenceService(reference_repository),
         card_service,
+        location_service,
         scheduler=Scheduler([job], interval_seconds=0.01),
     )
 
 
 def test_scheduler_runs_while_the_app_is_up_and_stops_on_shutdown(
-    settings, validator, store, reference_repository, card_service
+    settings, validator, store, reference_repository, card_service, location_service
 ) -> None:
     job = SignalJob()
     app = create_app(
-        _container(settings, validator, store, reference_repository, card_service, job)
+        _container(
+            settings,
+            validator,
+            store,
+            reference_repository,
+            card_service,
+            location_service,
+            job,
+        )
     )
     with TestClient(app) as client:
         assert job.started.wait(timeout=5)
@@ -51,10 +68,15 @@ def test_scheduler_runs_while_the_app_is_up_and_stops_on_shutdown(
 
 
 def test_app_without_scheduler_starts_normally(
-    settings, validator, store, reference_repository, card_service
+    settings, validator, store, reference_repository, card_service, location_service
 ) -> None:
     container = Container(
-        settings, validator, store, ReferenceService(reference_repository), card_service
+        settings,
+        validator,
+        store,
+        ReferenceService(reference_repository),
+        card_service,
+        location_service,
     )
     with TestClient(create_app(container)) as client:
         assert client.get("/health").status_code == 200

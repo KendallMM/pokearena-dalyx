@@ -21,9 +21,26 @@ class AbilityOut(BaseModel):
     )
 
 
+class EffectParameterOut(BaseModel):
+    name: str = Field(examples=["amount"])
+    kind: str = Field(
+        description="integer, card_type o integer_list", examples=["integer"]
+    )
+    required: bool
+    minimum: int | None = Field(description="Mínimo permitido, si aplica.")
+    maximum: int | None = Field(description="Máximo permitido, si aplica.")
+
+
+class LocationEffectTypeOut(BaseModel):
+    code: str = Field(examples=["type_bonus"])
+    name: str = Field(examples=["Bonificación por tipo"])
+    parameters: list[EffectParameterOut]
+
+
 class ReferencesResponse(BaseModel):
-    """Valores que el administrador puede elegir en el formulario de cartas."""
+    """Valores que el administrador puede elegir en los formularios de contenido."""
 
     card_types: list[CardTypeOut]
     rarities: list[RarityOut]
     abilities: list[AbilityOut]
+    location_effect_types: list[LocationEffectTypeOut]

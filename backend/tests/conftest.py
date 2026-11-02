@@ -16,12 +16,14 @@ from app.composition import Container
 from app.config.settings import Settings
 from app.main import create_app
 from app.business.catalog.content.cards.card_service import CardService
+from app.business.catalog.content.locations.location_service import LocationService
 from app.business.catalog.references.reference_service import ReferenceService
 from app.business.image_processing.image_processor import ImageProcessor
 from tests.fakes import (
     FakeCardRepository,
     FakeClock,
     FakeImageStore,
+    FakeLocationRepository,
     FakeReferenceRepository,
     InMemoryIdempotencyStore,
 )
@@ -85,6 +87,11 @@ def card_repository(events: list[str]) -> FakeCardRepository:
 
 
 @pytest.fixture
+def location_repository(events: list[str]) -> FakeLocationRepository:
+    return FakeLocationRepository(events)
+
+
+@pytest.fixture
 def clock() -> FakeClock:
     return FakeClock()
 
@@ -101,6 +108,22 @@ def card_service(
         image_processor=ImageProcessor(),
         image_store=image_store,
         cards=card_repository,
+        clock=clock,
+    )
+
+
+@pytest.fixture
+def location_service(
+    reference_repository: FakeReferenceRepository,
+    image_store: FakeImageStore,
+    location_repository: FakeLocationRepository,
+    clock: FakeClock,
+) -> LocationService:
+    return LocationService(
+        references=ReferenceService(reference_repository),
+        image_processor=ImageProcessor(),
+        image_store=image_store,
+        locations=location_repository,
         clock=clock,
     )
 
@@ -127,6 +150,7 @@ def client(
     store: InMemoryIdempotencyStore,
     reference_repository: FakeReferenceRepository,
     card_service: CardService,
+    location_service: LocationService,
     handler_calls: list[str],
 ) -> TestClient:
     """Aplicación real con un endpoint de prueba protegido por el gateway."""
@@ -137,6 +161,7 @@ def client(
             store,
             ReferenceService(reference_repository),
             card_service,
+            location_service,
         )
     )
 

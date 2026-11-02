@@ -3,8 +3,19 @@
 from sqlalchemy import select
 from sqlalchemy.orm import Session, sessionmaker
 
-from app.business.catalog.references.models import Ability, CardType, Rarity
-from app.persistence.relational.models import AbilityRow, CardTypeRow, RarityRow
+from app.business.catalog.references.models import (
+    Ability,
+    CardType,
+    EffectParameter,
+    LocationEffectType,
+    Rarity,
+)
+from app.persistence.relational.models import (
+    AbilityRow,
+    CardTypeRow,
+    LocationEffectTypeRow,
+    RarityRow,
+)
 
 
 class SqlReferenceRepository:
@@ -33,6 +44,29 @@ class SqlReferenceRepository:
                     affected_card_type=(
                         row.affected_card_type.code if row.affected_card_type else None
                     ),
+                )
+                for row in rows
+            ]
+
+    def list_location_effect_types(self) -> list[LocationEffectType]:
+        with self._session_factory() as session:
+            rows = session.scalars(
+                select(LocationEffectTypeRow).order_by(LocationEffectTypeRow.id)
+            )
+            return [
+                LocationEffectType(
+                    code=row.code,
+                    name=row.name,
+                    parameters=[
+                        EffectParameter(
+                            name=p["name"],
+                            kind=p["kind"],
+                            required=p["required"],
+                            minimum=p.get("minimum"),
+                            maximum=p.get("maximum"),
+                        )
+                        for p in row.parameters
+                    ],
                 )
                 for row in rows
             ]
