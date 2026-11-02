@@ -1,55 +1,58 @@
 services:
-  api:
+  backend:
     build: ./backend
     ports:
       - "8000:8000"
-    volumes:
-      - ./backend:/app # desarrollo: el código del host se ve dentro del contenedor
     environment:
-      DATABASE_URL: mysql+aiomysql://${MYSQL_USER}:${MYSQL_PASSWORD}@mysql:3306/${MYSQL_DATABASE}?charset=utf8mb4
-      MONGO_URL: mongodb://mongodb:27017
-      MONGO_DB_NAME: ${MONGO_DB_NAME}
+      ENVIRONMENT: ${ENVIRONMENT:-development}
+      MYSQL_URL: mysql+pymysql://${MYSQL_USER}:${MYSQL_PASSWORD}@mysql:3306/${MYSQL_DATABASE}
+      MONGO_URL: mongodb://mongo:27017
+      MONGO_DATABASE: ${MONGO_DATABASE:-pokearena}
+      REDIS_URL: redis://redis:6379/0
       JWT_SECRET: ${JWT_SECRET}
-      CURSOR_SECRET: ${CURSOR_SECRET}
-      JWT_ISSUER: ${JWT_ISSUER:-}
-      JWT_AUDIENCE: ${JWT_AUDIENCE:-}
-      IMAGE_MAX_ATTEMPTS: ${IMAGE_MAX_ATTEMPTS:-5}
-      IMAGE_WORKER_POLL_SECONDS: ${IMAGE_WORKER_POLL_SECONDS:-5}
-      TEMPORARY_IMAGE_TTL_SECONDS: ${TEMPORARY_IMAGE_TTL_SECONDS:-3600}
+      JWT_ISSUER: ${JWT_ISSUER:-pokearena}
+      JWT_AUDIENCE: ${JWT_AUDIENCE:-pokearena-admin}
+      JWT_EXPIRATION_MINUTES: ${JWT_EXPIRATION_MINUTES:-60}
     depends_on:
       mysql:
         condition: service_healthy
-      mongodb:
+      mongo:
         condition: service_healthy
-    restart: unless-stopped
+      redis:
+        condition: service_healthy
 
   mysql:
-    image: mysql:8.0
-    command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
+    image: mysql:8.4
     environment:
-      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
       MYSQL_DATABASE: ${MYSQL_DATABASE}
       MYSQL_USER: ${MYSQL_USER}
       MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
     volumes:
       - mysql_data:/var/lib/mysql
     healthcheck:
-      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p$$MYSQL_ROOT_PASSWORD --silent"]
-      interval: 5s
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
       timeout: 5s
-      retries: 20
-    restart: unless-stopped
+      retries: 10
 
-  mongodb:
-    image: mongo:6.0
+  mongo:
+    image: mongo:7
     volumes:
       - mongo_data:/data/db
     healthcheck:
-      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
-      interval: 5s
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
       timeout: 5s
-      retries: 20
-    restart: unless-stopped
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
 
 volumes:
   mysql_data:

@@ -1,82 +1,154 @@
-import os
-from pathlib import Path
+"""Piezas compartidas por las pruebas."""
 
+from datetime import datetime, timedelta, timezone
+from typing import Callable
+
+import jwt
 import pytest
-import pytest_asyncio
-from httpx import ASGITransport, AsyncClient
-from mongomock_motor import AsyncMongoMockClient
+from fastapi import Depends
+from fastapi.testclient import TestClient
+from pydantic import BaseModel, Field
 
-import app.models.ubicacion_model  # noqa: F401  (registra sus tablas)
-from app.database import Settings, create_engine, create_session_factory, init_db
-from app.main import build_container, create_app
-from app.models.carta_model import Base
-from tests.helpers import CURSOR_SECRET, JWT_SECRET
+from app.api.gateway.authentication import TokenValidator
+from app.api.gateway.errors import ADMIN_ERROR_RESPONSES
+from app.api.gateway.idempotency import IdempotencyContext, idempotency_context
+from app.composition import Container
+from app.config.settings import Settings
+from app.main import create_app
+from app.business.catalog.content.cards.card_service import CardService
+from app.business.catalog.references.reference_service import ReferenceService
+from app.business.image_processing.image_processor import ImageProcessor
+from tests.fakes import (
+    FakeCardRepository,
+    FakeClock,
+    FakeImageStore,
+    FakeReferenceRepository,
+    InMemoryIdempotencyStore,
+)
 
-
-def _database_url(tmp_path: Path) -> str:
-    return os.environ.get(
-        "TEST_DATABASE_URL", f"sqlite+aiosqlite:///{tmp_path / 'test.db'}"
-    )
+SECRET = "clave-de-prueba-de-al-menos-32-caracteres!!"
 
 
 @pytest.fixture
 def settings() -> Settings:
     return Settings(
-        database_url="unused",
-        mongo_url="unused",
-        mongo_db_name="test",
-        jwt_secret=JWT_SECRET,
-        cursor_secret=CURSOR_SECRET,
-        run_image_worker=False,
-        image_max_attempts=3,
-        image_retry_base_seconds=0,
+        mysql_url="mysql+pymysql://u:p@localhost/db",
+        mongo_url="mongodb://localhost:27017",
+        redis_url="redis://localhost:6379/0",
+        jwt_secret=SECRET,
     )
 
 
-@pytest_asyncio.fixture
-async def engine(tmp_path):
-    engine = create_engine(_database_url(tmp_path))
-    async with engine.begin() as connection:
-        await connection.run_sync(Base.metadata.drop_all)
-    await init_db(engine)
-    yield engine
-    await engine.dispose()
+@pytest.fixture
+def make_token(settings: Settings) -> Callable[..., str]:
+    def _make(role: str | None = "content_admin", **overrides: object) -> str:
+        claims: dict[str, object] = {
+            "sub": "user-1",
+            "iss": settings.jwt_issuer,
+            "aud": settings.jwt_audience,
+            "exp": datetime.now(timezone.utc) + timedelta(minutes=5),
+        }
+        if role is not None:
+            claims["role"] = role
+        claims.update(overrides)
+        claims = {k: v for k, v in claims.items() if v is not None}
+        return jwt.encode(claims, SECRET, algorithm="HS256")
+
+    return _make
 
 
 @pytest.fixture
-def is_mysql(engine) -> bool:
-    return engine.dialect.name in ("mysql", "mariadb")
+def validator(settings: Settings) -> TokenValidator:
+    return TokenValidator(
+        SECRET, settings.jwt_algorithms, settings.jwt_issuer, settings.jwt_audience
+    )
 
 
 @pytest.fixture
-def mongo_db():
-    return AsyncMongoMockClient()["pokearena_test"]
-
-
-@pytest_asyncio.fixture
-async def container(engine, mongo_db, settings):
-    factory = create_session_factory(engine)
-    return build_container(settings, factory, mongo_db)
-
-
-@pytest_asyncio.fixture
-async def app(container):
-    application = create_app(container.settings)
-    application.state.container = container
-    return application
-
-
-@pytest_asyncio.fixture
-async def client(app):
-    async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://test"
-    ) as http_client:
-        yield http_client
+def reference_repository() -> FakeReferenceRepository:
+    return FakeReferenceRepository()
 
 
 @pytest.fixture
-def no_background(monkeypatch):
-    """Evita que la imagen se procese sola tras la respuesta (la pone en cola)."""
-    from fastapi import BackgroundTasks
+def events() -> list[str]:
+    return []
 
-    monkeypatch.setattr(BackgroundTasks, "add_task", lambda self, *a, **k: None)
+
+@pytest.fixture
+def image_store(events: list[str]) -> FakeImageStore:
+    return FakeImageStore(events)
+
+
+@pytest.fixture
+def card_repository(events: list[str]) -> FakeCardRepository:
+    return FakeCardRepository(events)
+
+
+@pytest.fixture
+def clock() -> FakeClock:
+    return FakeClock()
+
+
+@pytest.fixture
+def card_service(
+    reference_repository: FakeReferenceRepository,
+    image_store: FakeImageStore,
+    card_repository: FakeCardRepository,
+    clock: FakeClock,
+) -> CardService:
+    return CardService(
+        references=ReferenceService(reference_repository),
+        image_processor=ImageProcessor(),
+        image_store=image_store,
+        cards=card_repository,
+        clock=clock,
+    )
+
+
+@pytest.fixture
+def store() -> InMemoryIdempotencyStore:
+    return InMemoryIdempotencyStore()
+
+
+class _Payload(BaseModel):
+    name: str = Field(min_length=1)
+    cost: int = Field(ge=0, le=10)
+
+
+@pytest.fixture
+def handler_calls() -> list[str]:
+    return []
+
+
+@pytest.fixture
+def client(
+    settings: Settings,
+    validator: TokenValidator,
+    store: InMemoryIdempotencyStore,
+    reference_repository: FakeReferenceRepository,
+    card_service: CardService,
+    handler_calls: list[str],
+) -> TestClient:
+    """Aplicación real con un endpoint de prueba protegido por el gateway."""
+    app = create_app(
+        Container(
+            settings,
+            validator,
+            store,
+            ReferenceService(reference_repository),
+            card_service,
+        )
+    )
+
+    @app.post("/test/things", status_code=202, responses=ADMIN_ERROR_RESPONSES)
+    def create_thing(
+        payload: _Payload, ctx: IdempotencyContext = Depends(idempotency_context)
+    ):
+        handler_calls.append(payload.name)
+        return ctx.respond(202, {"id": len(handler_calls), "name": payload.name})
+
+    @app.get("/test/boom")
+    def boom() -> None:
+        raise RuntimeError("fallo interno con datos sensibles")
+
+    return TestClient(app, raise_server_exceptions=False)
