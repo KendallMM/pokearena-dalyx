@@ -34,7 +34,7 @@ export function ThemeToggle() {
   return (
     <button
       type="button"
-      className="theme-toggle"
+      className="button button--secondary theme-toggle"
       aria-label="Cambiar modo oscuro/claro"
       onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
     >

@@ -4,8 +4,9 @@ import { useApi } from "../../api/ApiContext";
 import { ApiError } from "../../api/errors";
 import type { CreateCardResult } from "../../api/types";
 import { useSession } from "../../session/SessionContext";
-import { Alert, Button, Spinner } from "../../ui";
+import { Alert, Button } from "../../ui";
 import { accessDeniedMessage } from "../accessMessages";
+import { ReferencesStatus } from "../ReferencesStatus";
 import { BackToMenu } from "../BackToMenu";
 import {
   EMPTY_CARD_FORM,
@@ -149,34 +150,11 @@ export function CreateCardPage({ readImageSize }: Props) {
       <p className="page__intro">
         Completa los datos de la carta. Todos los campos son obligatorios.
       </p>
-
-      {state.status === "loading" && (
-        <Spinner label="Cargando opciones del formulario…" />
-      )}
-
-      {state.status === "error" && (
-        <>
-          <Alert
-            variant="error"
-            title={
-              accessDeniedMessage(state.error)
-                ? "Acceso denegado"
-                : "No se pudieron cargar las opciones"
-            }
-          >
-            <p>
-              {accessDeniedMessage(state.error) ??
-                "No pudimos cargar los tipos, rarezas y habilidades. Inténtalo de nuevo."}
-            </p>
-          </Alert>
-          <div className="form__actions">
-            <Button variant="secondary" onClick={reload}>
-              Reintentar
-            </Button>
-            <BackToMenu />
-          </div>
-        </>
-      )}
+      <ReferencesStatus
+        state={state}
+        reload={reload}
+        errorMessage="No pudimos cargar los tipos, rarezas y habilidades. Inténtalo de nuevo."
+      />
 
       {state.status === "ready" && (
         <div className="page__columns">

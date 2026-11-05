@@ -41,7 +41,11 @@ export function fakeServices(): ApiServices & {
 } {
   return {
     references: { load: vi.fn().mockResolvedValue(REFERENCES) },
-    cards: { create: vi.fn().mockResolvedValue(CREATED) },
+    cards: {
+      create: vi.fn().mockResolvedValue(CREATED),
+      search: vi.fn().mockResolvedValue({ items: [], next_cursor: null }),
+      image: vi.fn().mockResolvedValue(new Blob()),
+    },
     locations: { create: vi.fn().mockResolvedValue(LOCATION_CREATED) },
   };
 }

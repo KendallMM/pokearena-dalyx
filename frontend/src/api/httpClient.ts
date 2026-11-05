@@ -10,6 +10,10 @@ export interface HttpResponse<T> {
 export interface HttpClient {
   /** GET que reutiliza la respuesta guardada cuando el servidor responde 304 (ETag). */
   getCached<T>(path: string): Promise<T>;
+  /* GET de una respuesta JSON que cambia seguido, sin guardarla. */
+  getJson<T>(path: string): Promise<T>;
+  /* GET de un archivo, por ejemplo una imagen que pide sesión. */
+  getBlob(path: string): Promise<Blob>;
   /** POST de un formulario con archivos. */
   postForm<T>(
     path: string,
@@ -71,7 +75,21 @@ export function createHttpClient({
     );
   }
 
+  async function get(path: string): Promise<Response> {
+    const response = await send(path, { method: "GET", headers: authHeaders() });
+    if (!response.ok) throw await toError(response);
+    return response;
+  }
+
   return {
+    async getJson<T>(path: string): Promise<T> {
+      return (await (await get(path)).json()) as T;
+    },
+
+    async getBlob(path: string): Promise<Blob> {
+      return (await get(path)).blob();
+    },
+
     async getCached<T>(path: string): Promise<T> {
       const cached = etagCache.get(path);
       const headers: Record<string, string> = { ...authHeaders() };

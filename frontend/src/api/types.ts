@@ -68,6 +68,41 @@ export interface CreateCardResult {
   replayed: boolean;
 }
 
+/* Filtros de GET /admin/cartas. Todos son opcionales y los activos se cumplen a la vez. */
+export interface CardSearchCriteria {
+  code?: string;
+  name?: string;
+  cardType?: string;
+  rarity?: string;
+  ability?: string;
+  costMin?: number;
+  costMax?: number;
+  powerMin?: number;
+  powerMax?: number;
+}
+
+/* Una carta del resultado de la búsqueda. */
+export interface CardSearchResult {
+  code: string;
+  name: string;
+  cost: number;
+  power: number;
+  card_type: CardType;
+  rarity: Rarity;
+  ability: Ability;
+  /* Ruta de la versión grande de la imagen. Pide sesión. */
+  image_url: string;
+  image_status: string;
+  /* Intentos fallidos de generar la versión pequeña. */
+  thumbnail_attempts: number;
+}
+
+/* Una página de resultados. next_cursor es nulo en la última. */
+export interface CardSearchPage {
+  items: CardSearchResult[];
+  next_cursor: number | null;
+}
+
 export type EnergyMode = "fixed" | "per_card";
 
 /* Datos del formulario de Crear ubicación, ya validados. */

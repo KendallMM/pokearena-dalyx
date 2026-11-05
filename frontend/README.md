@@ -1,7 +1,7 @@
 Frontend de Poké-Arena
 ======================
 
-Interfaz web del administrador de contenido. Por ahora tiene las pantallas **Crear carta** y **Crear ubicación**.
+Interfaz web del administrador de contenido. Por ahora tiene las pantallas **Crear carta**, **Buscar cartas** y **Crear ubicación**.
 
 Cómo correrlo
 -------------

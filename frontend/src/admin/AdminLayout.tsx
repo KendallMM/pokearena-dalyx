@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { NavLink, Outlet } from "react-router-dom";
 
+import mascot from "../../images/pikachu.png";
 import logo from "../../images/pokeball.png";
 import { useAccount } from "../session/AccountContext";
 import { Button, ThemeToggle } from "../ui";
@@ -56,6 +57,7 @@ export function AdminLayout() {
         </button>
         <Brand />
         <SessionPanel />
+        <img className="site-bar__mascot" src={mascot} alt="" />
         {menuOpen && (
           <div className="menu-backdrop" onClick={() => setMenuOpen(false)} />
         )}
@@ -68,7 +70,7 @@ export function AdminLayout() {
             <ul className="nav">
               {links.map((link) => (
                 <li key={link.to}>
-                  <NavLink to={link.to} onClick={() => setMenuOpen(false)}>
+                  <NavLink end to={link.to} onClick={() => setMenuOpen(false)}>
                     {link.label}
                   </NavLink>
                 </li>

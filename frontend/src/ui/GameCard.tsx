@@ -12,6 +12,8 @@ interface Props {
   rarityName?: string;
   abilityName?: string;
   imageUrl?: string | null;
+  /* Texto en el lugar de la imagen mientras no hay una. */
+  imageHint?: string;
 }
 
 const MAX_TILT_DEGREES = 12;
@@ -41,6 +43,7 @@ export function GameCard({
   rarityName,
   abilityName,
   imageUrl,
+  imageHint = "Aquí se verá la imagen",
 }: Props) {
   const negative = typeof power === "number" && power < 0;
 
@@ -76,7 +79,7 @@ export function GameCard({
           {imageUrl ? (
             <img className="game-card__art" src={imageUrl} alt="" />
           ) : (
-            <div className="game-card__empty">Aquí se verá la imagen</div>
+            <div className="game-card__empty">{imageHint}</div>
           )}
         </div>
         <div className="game-card__panel">

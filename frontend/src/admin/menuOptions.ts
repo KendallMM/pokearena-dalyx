@@ -6,6 +6,11 @@ export const MENU_OPTIONS = [
     description: "Agrega una carta nueva al catálogo.",
   },
   {
+    to: "/admin/cartas",
+    label: "Buscar cartas",
+    description: "Revisa las cartas del catálogo con filtros.",
+  },
+  {
     to: "/admin/ubicaciones/nueva",
     label: "Crear ubicación",
     description: "Agrega una ubicación para las partidas.",
