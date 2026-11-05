@@ -21,6 +21,20 @@ services:
       redis:
         condition: service_healthy
 
+  frontend:
+    build: ./frontend
+    ports:
+      - "5173:5173"
+    environment:
+      BACKEND_URL: http://backend:8000
+      # En Docker sobre Windows los cambios de archivos no llegan solos: se revisan cada cierto tiempo.
+      VITE_USE_POLLING: "true"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    depends_on:
+      - backend
+
   mysql:
     image: mysql:8.4
     environment:

@@ -1,0 +1,1524 @@
+/* Estilos globales. Los colores y espacios viven en variables para cambiarlos en un solo lugar. */
+:root {
+  color-scheme: light;
+  /* Fondo de la página y lo que va directamente sobre él. */
+  --color-bg: #0670b2;
+  --color-on-page: #ffffff;
+  /* Tarjetas y formularios. */
+  --color-surface: #fafafa;
+  --color-field: #ffffff;
+  --color-text: #101418;
+  --color-muted: #4a5663;
+  --color-border: #b9c6d3;
+  --color-error: #a7190b;
+  --color-error-bg: #fdecea;
+  --color-success: #1b6e3c;
+  --color-success-bg: #e6f4ea;
+  --color-info-bg: #e3f0fa;
+  /* Marca: iguales en los dos modos. */
+  --color-black: #000000;
+  --color-red: #d31118;
+  --color-accent: #ff9d42;
+  /* Estilo arcade: contorno negro grueso, sombra dura y texto con contorno. */
+  --ink: #000000;
+  --color-panel-dark: #2a2f36;
+  --border-thick: 3px solid var(--ink);
+  --shadow-surface: 0 6px 0 var(--ink);
+  --text-outline: -1px -1px 0 var(--ink), 1px -1px 0 var(--ink), -1px 1px 0 var(--ink),
+    1px 1px 0 var(--ink), 0 3px 0 var(--ink);
+  --radius-control: 10px;
+  --radius-button: 10px;
+  --radius-card: 10px;
+  --space: 1rem;
+  /* Bangers trae un solo grosor: sin font-synthesis el navegador no le inventa negrita. */
+  --font-display: "Bangers", Impact, sans-serif;
+  /* Futura es de pago y no todos la tienen: Jost es la alternativa gratuita más parecida. */
+  font-family: Futura, "Jost", "Century Gothic", system-ui, sans-serif;
+  font-synthesis: none;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  /* No es negro puro: sobre negro se perderían los contornos. */
+  --color-bg: #0a2a45;
+  --color-surface: #0b1d30;
+  --color-field: #06121f;
+  --color-text: #ffffff;
+  --color-muted: #b4c6d8;
+  --color-border: #2b4a68;
+  --color-error: #ff9c94;
+  --color-error-bg: #3a1216;
+  --color-success: #7ee2a8;
+  --color-success-bg: #0e2e22;
+  --color-info-bg: #0d2c47;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  color: var(--color-on-page);
+  background-color: var(--color-bg);
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+h1 {
+  margin: 0 0 0.25rem;
+  font-family: var(--font-display);
+  font-size: clamp(2rem, 1.6rem + 1.6vw, 3rem);
+  font-weight: 800;
+  line-height: 1.15;
+  text-shadow: var(--text-outline);
+  text-transform: uppercase;
+}
+
+/* Texto para lectores de pantalla que no se muestra en pantalla. */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* Estructura */
+.layout__main {
+  width: 100%;
+  max-width: 76rem;
+  margin: 0 auto;
+  padding: 40px 24px 6rem;
+}
+
+.site-bar {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 16px;
+  align-items: center;
+  min-height: 76px;
+  padding: 12px 24px;
+  color: #fff;
+  background: var(--color-black);
+  border-bottom: 4px solid var(--color-accent);
+}
+
+/* Botón de las tres rayitas: queda por encima del panel para poder cerrarlo. */
+.menu-button {
+  position: relative;
+  z-index: 3;
+  flex: none;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  font: inherit;
+  font-size: 1.25rem;
+  color: #fff;
+  background: var(--color-panel-dark);
+  border: var(--border-thick);
+  border-radius: var(--radius-button);
+  cursor: pointer;
+}
+
+.menu-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1;
+  background: rgb(0 0 0 / 50%);
+}
+
+/* Panel lateral que se abre con el botón de menú, en cualquier tamaño de pantalla. */
+.menu-panel {
+  position: fixed;
+  inset: 0 auto 0 0;
+  z-index: 2;
+  width: 240px;
+  max-width: 85vw;
+  padding: 72px 24px 24px;
+  overflow-y: auto;
+  background: var(--color-black);
+  border-right: 4px solid var(--color-accent);
+  visibility: hidden;
+  transform: translateX(-100%);
+  transition:
+    transform 0.25s ease,
+    visibility 0.25s;
+}
+
+.menu-panel--open {
+  visibility: visible;
+  transform: none;
+}
+
+.menu-panel--open {
+  display: flex;
+  flex-direction: column;
+}
+
+.menu-panel__footer {
+  margin-top: auto;
+  padding-top: 1.5rem;
+}
+
+.menu-panel__footer .button {
+  display: block;
+  width: 100%;
+}
+
+.menu-panel__title {
+  margin: 0 0 0.75rem;
+  font-family: var(--font-display);
+  font-size: 1.5rem;
+  font-weight: 400;
+  letter-spacing: 0.05em;
+}
+
+.brand {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+  /* Empuja a la derecha lo demás de la barra, haya o no campo de token. */
+  margin: 0 auto 0 0;
+}
+
+.site-bar__mascot {
+  flex: none;
+  width: auto;
+  height: 4rem;
+  /* Más alta que la línea de la barra, pero sin hacerla crecer. */
+  margin-block: -0.5rem;
+}
+
+.brand__mark {
+  flex: none;
+  width: 2.4rem;
+  height: 2.4rem;
+  /* La imagen trae un 15% de margen transparente por lado: se compensa para que no se vea pequeña. */
+  transform: scale(1.4);
+}
+
+.brand__name {
+  display: block;
+  font-family: var(--font-display);
+  font-size: 1.35rem;
+  font-weight: 800;
+  line-height: 1.1;
+  color: var(--color-accent);
+}
+
+.brand__area {
+  display: block;
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.nav {
+  display: grid;
+  gap: 16px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* Enlaces con el mismo estilo de los botones; el de la pantalla actual va en naranja. */
+.nav a {
+  display: block;
+  min-height: 44px;
+  padding: 8px 12px;
+  font-family: var(--font-display);
+  font-size: 1.3rem;
+  letter-spacing: 0.05em;
+  line-height: 1.3;
+  color: #fff;
+  text-align: center;
+  text-shadow: var(--text-outline);
+  text-transform: uppercase;
+  background: var(--color-panel-dark);
+  border: var(--border-thick);
+  border-radius: var(--radius-button);
+  box-shadow:
+    0 6px 0 var(--ink),
+    inset 0 2px 0 rgb(255 255 255 / 30%),
+    inset 0 -5px 0 rgb(0 0 0 / 22%);
+}
+
+.nav a.active {
+  background: var(--color-accent);
+}
+
+/* Se ve como cualquier botón, pero flota sobre la pantalla. */
+.theme-toggle {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  z-index: 9999;
+}
+
+.skip-link {
+  position: absolute;
+  left: -999px;
+}
+
+.skip-link:focus {
+  left: var(--space);
+  top: var(--space);
+  z-index: 10000;
+  padding: 0.5rem 0.75rem;
+  color: #fff;
+  background: var(--color-black);
+}
+
+/* Entrada a la aplicación */
+.auth {
+  width: 100%;
+  max-width: 28rem;
+  min-height: 100vh;
+  margin: 0 auto;
+  padding: 40px 16px 6rem;
+}
+
+.auth__brand {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 1.5rem;
+}
+
+.auth__logo {
+  width: 4rem;
+  height: 4rem;
+  /* La imagen trae margen transparente, igual que en la barra. */
+  transform: scale(1.4);
+}
+
+.auth__title {
+  margin: 0;
+  color: var(--color-accent);
+}
+
+.auth__tabs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-bottom: 1.25rem;
+}
+
+.auth__tab {
+  min-height: 44px;
+  padding: 6px 12px;
+  font-family: var(--font-display);
+  font-size: 1.2rem;
+  letter-spacing: 0.05em;
+  color: #fff;
+  text-shadow: var(--text-outline);
+  text-transform: uppercase;
+  background: var(--color-panel-dark);
+  border: var(--border-thick);
+  border-radius: var(--radius-button);
+  box-shadow: 0 5px 0 var(--ink);
+  cursor: pointer;
+}
+
+.auth__tab[aria-pressed="true"] {
+  background: var(--color-accent);
+}
+
+/* Menú principal */
+.main-menu {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
+  gap: 24px;
+  margin: 1.5rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.main-menu__option {
+  display: grid;
+  gap: 0.4rem;
+  align-content: start;
+  height: 100%;
+  padding: 1.5rem;
+  color: var(--color-text);
+  background: var(--color-surface);
+  border: 4px solid var(--ink);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-surface);
+}
+
+.main-menu__option:active {
+  box-shadow: 0 2px 0 var(--ink);
+  transform: translateY(4px);
+}
+
+.main-menu__label {
+  font-family: var(--font-display);
+  font-size: 2rem;
+  letter-spacing: 0.04em;
+  line-height: 1.1;
+  color: var(--color-accent);
+  text-shadow: var(--text-outline);
+  text-transform: uppercase;
+}
+
+.main-menu__description {
+  color: var(--color-muted);
+}
+
+/* Buscar cartas */
+.search-form {
+  margin-bottom: 1.5rem;
+}
+
+.search-form .form__row {
+  grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
+}
+
+.search-area__count {
+  margin: 0 0 1rem;
+  font-weight: 600;
+}
+
+.search-results {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr));
+  gap: 32px 24px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.search-result {
+  display: grid;
+  gap: 0.25rem;
+  align-content: start;
+}
+
+.search-result .game-card {
+  margin-bottom: 1rem;
+}
+
+.search-result__code {
+  margin: 0;
+  font-weight: 800;
+  text-align: center;
+}
+
+.search-result__status {
+  margin: 0;
+  font-size: 0.85rem;
+  text-align: center;
+}
+
+.search-result__link {
+  justify-self: center;
+  font-size: 0.85rem;
+  font-weight: 600;
+  text-decoration: underline;
+}
+
+.search-area__more {
+  display: flex;
+  justify-content: center;
+  margin-top: 2rem;
+}
+
+/* Sesión de desarrollo */
+.session {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.session__label {
+  max-width: 9rem;
+  font-size: 0.8rem;
+  line-height: 1.25;
+  color: #d5dde5;
+}
+
+.session .input {
+  width: 10rem;
+  color: #fff;
+  background: #14181d;
+  border-color: var(--color-panel-dark);
+}
+
+/* Página y formulario */
+.page__intro {
+  margin: 0 0 1.5rem;
+  font-size: 1.1rem;
+  font-weight: 600;
+}
+
+.page__columns {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 19rem;
+  gap: 32px;
+  align-items: start;
+}
+
+.page__result {
+  display: grid;
+  align-content: start;
+}
+
+.card-preview {
+  position: sticky;
+  top: 104px;
+  display: grid;
+  gap: 0.75rem;
+}
+
+.card-preview__title {
+  margin: 0;
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-align: center;
+  text-shadow: 0 2px 0 var(--ink);
+  text-transform: uppercase;
+}
+
+.card-preview--done .game-card,
+.card-preview--done .location-card {
+  animation: card-reveal 0.7s cubic-bezier(0.2, 0.9, 0.3, 1.2) both;
+}
+
+/* El panel se inclina con un fondo aparte para que el texto del formulario quede recto. */
+.form {
+  position: relative;
+  isolation: isolate;
+  display: grid;
+  gap: 1.15rem;
+  padding: clamp(1.25rem, 3vw, 2.25rem);
+  color: var(--color-text);
+}
+
+.form::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: var(--color-surface);
+  border: 4px solid var(--ink);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-surface);
+  transform: skewX(-1deg);
+}
+
+.form__row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr));
+  gap: 1.15rem;
+}
+
+.form__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+  margin-top: 0.5rem;
+}
+
+/* Campos */
+.field {
+  display: grid;
+  gap: 0.3rem;
+  align-content: start;
+}
+
+.field__label {
+  font-weight: 800;
+}
+
+.field__required {
+  color: var(--color-error);
+}
+
+.field__hint {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--color-muted);
+}
+
+.field__error {
+  margin: 0;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--color-error);
+}
+
+.input {
+  width: 100%;
+  min-height: 2.75rem;
+  padding: 0.55rem 0.75rem;
+  font: inherit;
+  color: inherit;
+  background: var(--color-field);
+  border: var(--border-thick);
+  border-radius: var(--radius-control);
+  box-shadow: inset 0 3px 0 rgb(0 0 0 / 12%);
+}
+
+.input--multiline {
+  resize: vertical;
+}
+
+.checkbox-group {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: none;
+}
+
+.checkbox-group legend {
+  padding: 0;
+}
+
+.checkbox-group__options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  margin-top: 0.3rem;
+}
+
+.checkbox-group__option {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  min-height: 2.75rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.checkbox-group__option input {
+  width: 1.25rem;
+  height: 1.25rem;
+  margin: 0;
+  accent-color: var(--color-red);
+}
+
+.input--file {
+  padding: 0.65rem;
+  cursor: pointer;
+}
+
+.input--file::file-selector-button {
+  margin-right: 0.75rem;
+  padding: 0.4rem 0.9rem;
+  font: inherit;
+  font-weight: 800;
+  color: #fff;
+  text-transform: uppercase;
+  background: var(--color-panel-dark);
+  border: var(--border-thick);
+  border-radius: var(--radius-button);
+  cursor: pointer;
+}
+
+.field--invalid .input {
+  border-color: var(--color-error);
+}
+
+.input:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.image-preview {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+  margin-top: 0.5rem;
+}
+
+.image-preview img {
+  max-height: 5rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-control);
+}
+
+.image-preview__name {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--color-muted);
+  overflow-wrap: anywhere;
+}
+
+/* Botones */
+.button {
+  min-height: 2.75rem;
+  padding: 0.45rem 1.25rem;
+  font-family: var(--font-display);
+  font-size: 1.2rem;
+  letter-spacing: 0.05em;
+  color: #fff;
+  text-shadow: var(--text-outline);
+  text-transform: uppercase;
+  border: var(--border-thick);
+  border-radius: var(--radius-button);
+  /* Sombra dura y bordes internos: dan volumen, y al presionar el botón "baja". */
+  box-shadow:
+    0 5px 0 var(--ink),
+    inset 0 2px 0 rgb(255 255 255 / 30%),
+    inset 0 -4px 0 rgb(0 0 0 / 22%);
+  cursor: pointer;
+}
+
+.button:active:not(:disabled) {
+  box-shadow:
+    0 2px 0 var(--ink),
+    inset 0 2px 0 rgb(255 255 255 / 30%),
+    inset 0 -4px 0 rgb(0 0 0 / 22%);
+  transform: translateY(3px);
+}
+
+/* Enlace con forma de botón: lleva de vuelta al menú principal. Va al otro extremo de la línea. */
+.back-button {
+  display: inline-block;
+  width: auto;
+  margin-left: auto;
+  line-height: 1.5;
+}
+
+.button--primary {
+  background: var(--color-red);
+}
+
+.button--secondary {
+  background: var(--color-panel-dark);
+}
+
+.button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.link-button {
+  padding: 0;
+  font: inherit;
+  color: var(--color-error);
+  text-align: left;
+  text-decoration: underline;
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+
+/* Mensajes */
+.alert {
+  margin-bottom: var(--space);
+  padding: 0.85rem 1rem;
+  color: var(--color-text);
+  border: var(--border-thick);
+  border-left-width: 8px;
+  border-radius: var(--radius-control);
+  box-shadow: 0 4px 0 var(--ink);
+}
+
+.alert p {
+  margin: 0.25rem 0;
+}
+
+.alert__title {
+  font-weight: 700;
+}
+
+.alert--error {
+  color: var(--color-error);
+  background: var(--color-error-bg);
+}
+
+.alert--success {
+  color: var(--color-success);
+  background: var(--color-success-bg);
+}
+
+.alert--info {
+  background: var(--color-info-bg);
+}
+
+.error-list {
+  margin: 0.25rem 0 0;
+  padding-left: 1.2rem;
+}
+
+.spinner {
+  display: flex;
+  gap: 0.6rem;
+  align-items: center;
+}
+
+.spinner__dot {
+  width: 1rem;
+  height: 1rem;
+  border: 3px solid rgb(255 255 255 / 35%);
+  border-top-color: var(--color-accent);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+/* Carta del juego. Conserva sus colores en ambos temas porque es arte, no interfaz. */
+.game-card {
+  --type: #6d7396;
+  /* Color del marco: el del tipo, salvo en las rarezas que tienen el suyo. */
+  --frame: var(--type);
+  position: relative;
+  width: 100%;
+  max-width: 19rem;
+  margin: 0 auto;
+  padding: 5px;
+  aspect-ratio: 5 / 7;
+  color: #fff;
+  background: var(--frame);
+  border-radius: 12px;
+  box-shadow:
+    0 0 0 4px var(--ink),
+    0 9px 0 4px var(--ink);
+  transform: perspective(900px) rotateX(var(--tilt-x, 0deg))
+    rotateY(var(--tilt-y, 0deg));
+  transition: transform 0.2s ease-out;
+}
+
+.game-card[data-type="FUE"] {
+  --type: #ff7a30;
+}
+
+.game-card[data-type="AGU"] {
+  --type: #38a9ff;
+}
+
+.game-card[data-type="PLA"] {
+  --type: #4fcf6b;
+}
+
+.game-card[data-type="ELE"] {
+  --type: #ffd52e;
+}
+
+.game-card[data-type="PSI"] {
+  --type: #e45bd6;
+}
+
+.game-card[data-type="LUC"] {
+  --type: #d8824a;
+}
+
+.game-card[data-rarity="UNCOMMON"] {
+  --frame: #dfe6ee;
+}
+
+.game-card[data-rarity="RARE"] {
+  --frame: var(--color-accent);
+}
+
+/* El borde legendario cambia de color girando un arcoíris. */
+.game-card[data-rarity="LEGENDARY"] {
+  --frame: conic-gradient(
+    from var(--holo-angle),
+    #ff5f6d,
+    #ffc371,
+    #fff27a,
+    #5ef0a0,
+    #52c7ff,
+    #b57bff,
+    #ff5f6d
+  );
+  animation: holo-spin 5s linear infinite;
+}
+
+@property --holo-angle {
+  syntax: "<angle>";
+  inherits: true;
+  initial-value: 0deg;
+}
+
+/* De arriba a abajo: nombre entre el costo y el poder, imagen y panel liso con la habilidad. */
+.game-card__inner {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+  background: #14162b;
+  border-radius: var(--radius-button);
+}
+
+.game-card__top {
+  flex: none;
+  display: flex;
+  gap: 0.4rem;
+  align-items: center;
+  padding: 0.4rem 0.5rem;
+}
+
+.game-card__picture {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  background: color-mix(in srgb, var(--type) 35%, #14162b);
+  border-block: 3px solid var(--ink);
+}
+
+.game-card__art {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.game-card__empty {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  padding: 0 1.5rem;
+  place-items: center;
+  font-size: 0.85rem;
+  color: rgb(255 255 255 / 72%);
+  text-align: center;
+}
+
+.game-card__stat {
+  flex: none;
+  display: grid;
+  place-items: center;
+  font-family: var(--font-display);
+  font-weight: 800;
+  line-height: 1;
+  text-shadow: var(--text-outline);
+}
+
+/* Costo: óvalo irregular y un poco girado. El número se endereza por dentro. */
+.game-card__stat--cost {
+  width: 3.2rem;
+  height: 2.6rem;
+  font-size: 1.45rem;
+  background: #2f4bd8;
+  border: var(--border-thick);
+  border-radius: 62% 38% 55% 45% / 48% 58% 42% 52%;
+  transform: rotate(-7deg);
+}
+
+.game-card__stat--cost > span {
+  transform: rotate(7deg);
+}
+
+/* Poder: solo el número, del mismo tamaño que el costo. */
+.game-card__stat--power {
+  min-width: 2rem;
+  font-size: 1.45rem;
+  color: var(--color-accent);
+}
+
+.game-card__stat--negative {
+  color: #ff7a9a;
+}
+
+/* Hasta dos líneas: los nombres pueden tener 100 caracteres y deben caber en la franja. */
+.game-card__name {
+  flex: 1;
+  display: -webkit-box;
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  font-family: var(--font-display);
+  font-size: 1.2rem;
+  font-weight: 800;
+  line-height: 1.1;
+  overflow-wrap: anywhere;
+  text-shadow: var(--text-outline);
+  text-transform: uppercase;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.game-card__panel {
+  flex: 0 0 38%;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  min-height: 0;
+  padding: 0.6rem 0.75rem;
+  overflow: hidden;
+}
+
+.game-card__tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.game-card__tag {
+  padding: 0.1rem 0.5rem;
+  font-size: 0.72rem;
+  font-weight: 800;
+  background: var(--color-panel-dark);
+  border: 2px solid var(--ink);
+  border-radius: 4px;
+}
+
+.game-card__tag--type {
+  color: #14162b;
+  background: var(--type);
+}
+
+.game-card__ability-name {
+  margin: 0.2rem 0 0;
+  font-size: 1rem;
+  font-weight: 800;
+  line-height: 1.2;
+}
+
+/* Ubicación del juego: conserva sus colores en ambos temas, igual que la carta. */
+.location-card {
+  width: 100%;
+  max-width: 19rem;
+  margin: 0 auto;
+  overflow: hidden;
+  color: #fff;
+  background: #14162b;
+  border: 5px solid #4db2ff;
+  border-radius: 12px;
+  box-shadow:
+    0 0 0 4px var(--ink),
+    0 9px 0 4px var(--ink);
+}
+
+.location-card__name {
+  margin: 0;
+  padding: 0.55rem 0.75rem;
+  font-family: var(--font-display);
+  font-size: 1.4rem;
+  font-weight: 400;
+  letter-spacing: 0.05em;
+  line-height: 1.15;
+  overflow-wrap: anywhere;
+  text-align: center;
+  text-shadow: var(--text-outline);
+  text-transform: uppercase;
+}
+
+/* La misma proporción que exige la imagen, para que se vea completa. */
+.location-card__picture {
+  position: relative;
+  aspect-ratio: 4 / 3;
+  background: #2a3a55;
+  border-block: 3px solid var(--ink);
+}
+
+.location-card__art {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.location-card__empty {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  padding: 0 1.5rem;
+  place-items: center;
+  font-size: 0.85rem;
+  color: rgb(255 255 255 / 72%);
+  text-align: center;
+}
+
+.location-card__panel {
+  display: grid;
+  gap: 0.45rem;
+  min-height: 3.5rem;
+  padding: 0.65rem 0.75rem 0.75rem;
+}
+
+.location-card__effect {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 800;
+  line-height: 1.2;
+}
+
+/* Hasta cinco líneas: la descripción puede tener 500 caracteres. */
+.location-card__description {
+  display: -webkit-box;
+  margin: 0;
+  overflow: hidden;
+  font-size: 0.85rem;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+  color: rgb(255 255 255 / 85%);
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 5;
+}
+
+.location-card__tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.location-card__tag {
+  padding: 0.1rem 0.5rem;
+  font-size: 0.72rem;
+  font-weight: 800;
+  background: var(--color-panel-dark);
+  border: 2px solid var(--ink);
+  border-radius: 4px;
+}
+
+@keyframes holo-spin {
+  to {
+    --holo-angle: 360deg;
+  }
+}
+
+@keyframes card-reveal {
+  from {
+    opacity: 0;
+    transform: perspective(900px) rotateY(-90deg) scale(0.9);
+  }
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Pantalla de partida. Siempre es oscura, sin importar el modo elegido en administración. */
+.match {
+  /* No es negro puro: sobre negro se perderían los contornos. */
+  --match-bg: #0a2a45;
+  --match-surface: #0b1d30;
+  --match-text: #ffffff;
+  --match-muted: #c3d2e0;
+  --match-neutral: #a3b4c4;
+  --match-rival: var(--color-accent);
+  --match-player: #4db2ff;
+  --match-button: #0670b2;
+  --match-time: var(--color-accent);
+  color-scheme: dark;
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  padding: 0 32px 24px;
+  color: var(--match-text);
+  background-color: var(--match-bg);
+}
+
+.match p,
+.match h2,
+.match ul,
+.match dl,
+.match dd {
+  margin: 0;
+  padding: 0;
+}
+
+.match ul {
+  list-style: none;
+}
+
+.match-top {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 24px;
+  align-items: center;
+  min-height: 64px;
+  padding: 8px 0;
+  font-weight: 600;
+  color: var(--match-muted);
+  border-bottom: 4px solid var(--color-accent);
+}
+
+.match-top__rival strong {
+  color: var(--match-text);
+}
+
+/* El tablero ocupa el alto sobrante; la mano y los botones quedan abajo. */
+.match-board {
+  flex: 1;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 24px;
+  align-items: center;
+  padding: 24px 0;
+}
+
+.match-column {
+  display: grid;
+  gap: 12px;
+  justify-items: center;
+  text-align: center;
+}
+
+.match-played {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  justify-content: center;
+  min-height: 64px;
+}
+
+.match-played__card {
+  display: grid;
+  width: 46px;
+  height: 64px;
+  place-items: center;
+  font-family: var(--font-display);
+  font-size: 1.4rem;
+  text-shadow: var(--text-outline);
+  background: var(--match-surface);
+  border: var(--border-thick);
+  border-radius: 4px;
+  box-shadow: 0 3px 0 var(--ink);
+}
+
+/* Raya en el lugar de las cartas cuando ese lado todavía no ha jugado ninguna. */
+.match-played__empty {
+  display: grid;
+  height: 64px;
+  place-items: center;
+  font-size: 1.5rem;
+  color: var(--match-muted);
+}
+
+.match-played--rival .match-played__card {
+  border-top: 6px solid var(--match-rival);
+}
+
+.match-played--player .match-played__card {
+  border-bottom: 6px solid var(--match-player);
+}
+
+.match-power {
+  font-family: var(--font-display);
+  font-size: 2.5rem;
+  letter-spacing: 0.03em;
+  line-height: 1.1;
+  color: var(--match-neutral);
+  text-shadow: var(--text-outline);
+}
+
+.match-column[data-leader="rival"] .match-power--rival {
+  color: var(--match-rival);
+}
+
+.match-column[data-leader="player"] .match-power--player {
+  color: var(--match-player);
+}
+
+.match-location {
+  position: relative;
+  isolation: isolate;
+  width: 100%;
+  padding: 14px 20px;
+}
+
+.match-location::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: var(--match-surface);
+  border: 4px solid var(--match-player);
+  border-radius: var(--radius-card);
+  box-shadow:
+    0 0 0 3px var(--ink),
+    0 6px 0 3px var(--ink);
+}
+
+.match-location__name {
+  font-family: var(--font-display);
+  font-size: 1.5rem;
+  font-weight: 400;
+  letter-spacing: 0.05em;
+  line-height: 1.2;
+  text-transform: uppercase;
+}
+
+.match-location__effect {
+  font-size: 0.9rem;
+  color: var(--match-muted);
+}
+
+.match-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 28px;
+  align-items: center;
+}
+
+.match-stats div {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.match-stats dt {
+  color: var(--match-muted);
+}
+
+.match-stats dd {
+  font-family: var(--font-display);
+  font-size: 1.6rem;
+  letter-spacing: 0.03em;
+  line-height: 1;
+}
+
+.match .match-stats__energy {
+  font-size: 2.25rem;
+  color: var(--match-player);
+}
+
+.match .match-stats__time {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  color: var(--match-time);
+}
+
+/* Barra del tiempo que queda del turno. */
+.match-time-bar {
+  display: block;
+  width: 96px;
+  height: 14px;
+  overflow: hidden;
+  background: var(--match-surface);
+  border: var(--border-thick);
+  border-radius: 4px;
+}
+
+.match-time-bar__left {
+  display: block;
+  height: 100%;
+  background: var(--match-time);
+}
+
+/* Última línea: el estado del turno a la izquierda y los botones a la derecha. */
+.match-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.match-actions__group {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.match-button {
+  min-height: 44px;
+  padding: 0 20px;
+  font-family: var(--font-display);
+  font-size: 1.3rem;
+  letter-spacing: 0.05em;
+  color: #fff;
+  text-shadow: var(--text-outline);
+  text-transform: uppercase;
+  background: var(--match-button);
+  border: var(--border-thick);
+  border-radius: var(--radius-button);
+  box-shadow:
+    0 6px 0 var(--ink),
+    inset 0 2px 0 rgb(255 255 255 / 30%),
+    inset 0 -5px 0 rgb(0 0 0 / 22%);
+  cursor: pointer;
+}
+
+.match-button:active {
+  box-shadow:
+    0 2px 0 var(--ink),
+    inset 0 2px 0 rgb(255 255 255 / 30%),
+    inset 0 -5px 0 rgb(0 0 0 / 22%);
+  transform: translateY(3px);
+}
+
+/* Mismo estilo que los demás; solo es más grande por ser la acción principal. */
+.match-button--confirm {
+  min-height: 56px;
+  padding: 0 40px;
+  font-size: 1.7rem;
+}
+
+.match .match-hand {
+  /* Sin esto, al tener scroll propio, la columna la encoge y corta las cartas. */
+  flex: none;
+  display: flex;
+  gap: 22px;
+  /* "safe": si la mano no cabe, empieza en la primera carta en lugar de cortarla. */
+  justify-content: safe center;
+  overflow: auto hidden;
+  /* Espacio para el marco y la inclinación, que quedan fuera de cada carta. */
+  padding: 16px 12px 20px;
+  border-top: 4px solid var(--ink);
+  scrollbar-color: var(--match-neutral) transparent;
+}
+
+.match-card {
+  position: relative;
+  flex: none;
+  width: 104px;
+  height: 140px;
+  background: var(--match-surface);
+  border-radius: 6px;
+  /* Marco blanco, contorno negro y sombra dura. */
+  box-shadow:
+    0 0 0 3px #fafafa,
+    0 0 0 6px var(--ink),
+    0 6px 0 6px var(--ink);
+  transform: rotate(-1.5deg);
+}
+
+.match-card:nth-child(even) {
+  transform: rotate(1.5deg);
+}
+
+.match-card--unplayable {
+  opacity: 0.4;
+}
+
+.match-card__cost,
+.match-card__power {
+  position: absolute;
+  top: 8px;
+  font-family: var(--font-display);
+  font-size: 1.7rem;
+  line-height: 1;
+  text-shadow: var(--text-outline);
+}
+
+.match-card__cost {
+  left: 10px;
+  color: var(--match-player);
+}
+
+.match-card__power {
+  right: 10px;
+}
+
+.match-card__name {
+  position: absolute;
+  inset: auto 0 12px;
+  font-size: 0.85rem;
+  color: var(--match-muted);
+  text-align: center;
+}
+
+/* Foco visible para quien navega con teclado: dos tonos para verse sobre cualquier fondo. */
+:focus-visible {
+  outline: 3px solid var(--color-accent);
+  outline-offset: 2px;
+  box-shadow: 0 0 0 2px var(--color-black);
+}
+
+@media (max-width: 62rem) {
+  .page__columns {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  /* El formulario queda muy alto: inclinado, se saldría de la pantalla. */
+  .form::before {
+    transform: none;
+  }
+
+  /* En pantallas angostas la carta va primero para verla mientras se empieza a llenar. */
+  .card-preview {
+    position: static;
+    order: -1;
+  }
+
+  .card-preview .game-card {
+    max-width: 14rem;
+  }
+
+  /* En la carta pequeña, nombre, costo y poder se reducen para que el nombre no se parta. */
+  .card-preview .game-card__stat--cost {
+    width: 2.6rem;
+    height: 2.15rem;
+    font-size: 1.2rem;
+  }
+
+  .card-preview .game-card__stat--power {
+    min-width: 1.6rem;
+    font-size: 1.2rem;
+  }
+
+  .card-preview .game-card__name {
+    font-size: 1.05rem;
+  }
+}
+
+/* En pantallas angostas la sesión baja a una segunda línea de la barra. */
+@media (max-width: 768px) {
+  .site-bar {
+    padding: 12px 16px;
+  }
+
+  /* Pikachu se queda en la primera línea y el campo baja a la segunda. */
+  .session {
+    order: 1;
+    flex: 1 1 100%;
+  }
+
+  .session .input {
+    flex: 1;
+    width: auto;
+    min-width: 0;
+  }
+}
+
+@media (max-width: 480px) {
+  .layout__main {
+    padding: 24px 12px 6rem;
+  }
+
+  .button:not(.back-button, .theme-toggle) {
+    display: block;
+    width: 100%;
+  }
+
+  .session .button {
+    flex: none;
+    width: auto;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .spinner__dot,
+  .game-card,
+  .card-preview--done .game-card,
+  .card-preview--done .location-card {
+    animation: none;
+  }
+
+  .game-card {
+    transform: none;
+    transition: none;
+  }
+
+  .menu-panel {
+    transition: none;
+  }
+}
