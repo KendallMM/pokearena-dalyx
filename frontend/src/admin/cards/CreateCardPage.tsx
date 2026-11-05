@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useApi } from "../../api/ApiContext";
 import { ApiError } from "../../api/errors";
 import type { CreateCardResult } from "../../api/types";
+import { useSession } from "../../session/SessionContext";
 import { Alert, Button, Spinner } from "../../ui";
 import { accessDeniedMessage } from "../accessMessages";
 import {
@@ -14,20 +15,21 @@ import {
   type CardFormField,
   type CardFormValues,
 } from "./cardRules";
+import { CardPreview } from "./CardPreview";
 import { CreateCardForm } from "./CreateCardForm";
 import { inspectCardImage, type ImageSize } from "./imageRules";
 import { useOperationKey } from "./operationId";
 import { useReferences } from "./useReferences";
 
 interface Props {
-  /** Lector del tamaño de la imagen. Las pruebas lo reemplazan porque jsdom no decodifica imágenes. */
+  /* Lector del tamaño de la imagen. Las pruebas lo reemplazan porque jsdom no decodifica imágenes. */
   readImageSize?: (file: File) => Promise<ImageSize>;
 }
 
 const RETRY_MESSAGE =
   "No se pudo completar la operación. Puedes volver a intentarlo: si la carta ya se había creado, no se duplicará.";
 
-/** Convierte un error del envío en el mensaje o el campo que debe ver el administrador. */
+/* Convierte un error del envío en el mensaje o el campo que debe ver el administrador. */
 function describeSubmitError(error: unknown): {
   field?: CardFormField;
   message: string;
@@ -46,9 +48,10 @@ function describeSubmitError(error: unknown): {
   return { message: RETRY_MESSAGE };
 }
 
-/** Pantalla Crear carta (secuencia "Crear carta", partes A y B). */
+/* Pantalla Crear carta (secuencia "Crear carta", partes A y B). */
 export function CreateCardPage({ readImageSize }: Props) {
   const { cards } = useApi();
+  const { hasToken } = useSession();
   const { state, reload } = useReferences();
   const operationKey = useOperationKey();
 
@@ -60,6 +63,14 @@ export function CreateCardPage({ readImageSize }: Props) {
   const summaryRef = useRef<HTMLDivElement>(null);
   const [focusSummary, setFocusSummary] = useState(0);
   const imageCheck = useRef(0);
+
+  // El error y el resultado eran de la sesión anterior. Lo que se estaba escribiendo se
+  // conserva, para no perderlo si solo había vencido el token.
+  useEffect(() => {
+    setGeneralError(null);
+    if (result) createAnother();
+    // Solo debe correr cuando cambia la sesión.
+  }, [hasToken]);
 
   // Al fallar el envío, el resumen de errores recibe el foco.
   useEffect(() => {
@@ -165,37 +176,44 @@ export function CreateCardPage({ readImageSize }: Props) {
         </>
       )}
 
-      {state.status === "ready" && result && (
-        <>
-          <Alert variant="success" title={result.message}>
-            <p>
-              Código de la carta: <strong>{result.code}</strong>
-            </p>
-            {result.replayed && (
-              <p>Esta carta ya estaba registrada, así que no se creó otra.</p>
-            )}
-            <p>
-              La versión pequeña de la imagen se está generando. La carta estará
-              disponible para los jugadores cuando termine.
-            </p>
-          </Alert>
-          <div className="form__actions">
-            <Button onClick={createAnother}>Crear otra carta</Button>
-          </div>
-        </>
-      )}
-
-      {state.status === "ready" && !result && (
-        <CreateCardForm
-          ref={summaryRef}
-          references={state.references}
-          values={values}
-          errors={errors}
-          generalError={generalError}
-          submitting={submitting}
-          onChange={handleChange}
-          onSubmit={() => void handleSubmit()}
-        />
+      {state.status === "ready" && (
+        <div className="page__columns">
+          {result ? (
+            <div className="page__result">
+              <Alert variant="success" title={result.message}>
+                <p>
+                  Código de la carta: <strong>{result.code}</strong>
+                </p>
+                {result.replayed && (
+                  <p>Esta carta ya estaba registrada, así que no se creó otra.</p>
+                )}
+                <p>
+                  La versión pequeña de la imagen se está generando. La carta estará
+                  disponible para los jugadores cuando termine.
+                </p>
+              </Alert>
+              <div className="form__actions">
+                <Button onClick={createAnother}>Crear otra carta</Button>
+              </div>
+            </div>
+          ) : (
+            <CreateCardForm
+              ref={summaryRef}
+              references={state.references}
+              values={values}
+              errors={errors}
+              generalError={generalError}
+              submitting={submitting}
+              onChange={handleChange}
+              onSubmit={() => void handleSubmit()}
+            />
+          )}
+          <CardPreview
+            references={state.references}
+            values={values}
+            done={result !== null}
+          />
+        </div>
       )}
     </section>
   );

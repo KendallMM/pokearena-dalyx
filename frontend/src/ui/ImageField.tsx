@@ -1,6 +1,5 @@
-import { useEffect, useState } from "react";
-
 import { Field } from "./Field";
+import { useObjectUrl } from "./useObjectUrl";
 
 interface Props {
   id: string;
@@ -14,7 +13,7 @@ interface Props {
   disabled?: boolean;
 }
 
-/** Selector de imagen con vista previa. */
+/* Selector de imagen con vista previa. */
 export function ImageField({
   id,
   label,
@@ -26,17 +25,7 @@ export function ImageField({
   required,
   disabled,
 }: Props) {
-  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (!file || typeof URL.createObjectURL !== "function") {
-      setPreviewUrl(null);
-      return;
-    }
-    const url = URL.createObjectURL(file);
-    setPreviewUrl(url);
-    return () => URL.revokeObjectURL(url);
-  }, [file]);
+  const previewUrl = useObjectUrl(file);
 
   return (
     <Field id={id} label={label} required={required} hint={hint} error={error}>
