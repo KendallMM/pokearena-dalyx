@@ -2,46 +2,70 @@ import {
   createContext,
   useCallback,
   useContext,
+  useEffect,
   useMemo,
   useRef,
   useState,
   type ReactNode,
 } from "react";
 
-import { readToken, removeToken, saveToken } from "./tokenStorage";
-
 interface SessionValue {
   /** Hay un token cargado (no significa que el servidor lo acepte). */
   hasToken: boolean;
   /** Lee el token en el momento de cada llamada a la API. */
   getToken: () => string | null;
-  setToken: (token: string) => void;
+  setToken: (token: string, expiresAt?: string) => void;
   clearToken: () => void;
 }
 
 const SessionContext = createContext<SessionValue | null>(null);
 
 /**
- * Sesión de la interfaz. Por ahora el token se pega a mano (sesión de desarrollo);
- * el inicio de sesión real llegará con la historia de Sesiones.
+ * Credencial bearer solo en memoria: no se persiste en el almacenamiento web.
  */
 export function SessionProvider({ children }: { children: ReactNode }) {
-  const tokenRef = useRef<string | null>(readToken());
-  const [hasToken, setHasToken] = useState(tokenRef.current !== null);
+  const tokenRef = useRef<string | null>(null);
+  const expirationRef = useRef<number | null>(null);
+  const [hasToken, setHasToken] = useState(false);
+  const [expiration, setExpiration] = useState<number | null>(null);
 
-  const getToken = useCallback(() => tokenRef.current, []);
-  const setToken = useCallback((token: string) => {
+  const getToken = useCallback(() => {
+    if (expirationRef.current !== null && Date.now() >= expirationRef.current)
+      return null;
+    return tokenRef.current;
+  }, []);
+  const setToken = useCallback((token: string, expiresAt?: string) => {
     const clean = token.trim();
+    const expiry = expiresAt ? Date.parse(expiresAt) : null;
+    if (expiry !== null && (!Number.isFinite(expiry) || expiry <= Date.now())) return;
     tokenRef.current = clean || null;
-    if (clean) saveToken(clean);
-    else removeToken();
+    expirationRef.current = expiry;
+    setExpiration(expiry);
     setHasToken(clean !== "");
   }, []);
   const clearToken = useCallback(() => {
     tokenRef.current = null;
-    removeToken();
+    expirationRef.current = null;
+    setExpiration(null);
     setHasToken(false);
   }, []);
+
+  useEffect(() => {
+    // Retira los datos del prototipo que almacenaba cuentas y tokens localmente.
+    try {
+      sessionStorage.removeItem("pokearena.session.token");
+      sessionStorage.removeItem("pokearena.session.account");
+      localStorage.removeItem("pokearena.accounts");
+    } catch {
+      // El inicio de sesión funciona también sin almacenamiento web.
+    }
+  }, []);
+
+  useEffect(() => {
+    if (expiration === null) return;
+    const timer = window.setTimeout(clearToken, Math.max(0, expiration - Date.now()));
+    return () => window.clearTimeout(timer);
+  }, [expiration, clearToken]);
 
   const value = useMemo(
     () => ({ hasToken, getToken, setToken, clearToken }),

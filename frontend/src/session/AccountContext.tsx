@@ -7,52 +7,47 @@ import {
   type ReactNode,
 } from "react";
 
-import {
-  readCurrentAccount,
-  registerAccount,
-  saveCurrentAccount,
-  verifyAccount,
-  type Account,
-} from "./localAccounts";
+import type {
+  PlayerAccount,
+  PlayerSession,
+  InitialCollectionDelivery,
+} from "../api/types";
 import { useSession } from "./SessionContext";
 
 interface AccountValue {
-  account: Account | null;
-  register: (input: { name: string; email: string; password: string }) => Promise<void>;
-  logIn: (email: string, password: string) => Promise<void>;
+  account: PlayerAccount | null;
+  initialCollection: InitialCollectionDelivery | null;
+  enter: (session: PlayerSession) => void;
   logOut: () => void;
 }
 
 const AccountContext = createContext<AccountValue | null>(null);
 
-/* Quién entró a la aplicación. Es aparte del token, que da el acceso a la API. */
+/* La cuenta y el bearer provienen siempre del mismo inicio de sesión real. */
 export function AccountProvider({ children }: { children: ReactNode }) {
-  const { clearToken } = useSession();
-  const [account, setAccount] = useState<Account | null>(readCurrentAccount);
+  const { clearToken, setToken, hasToken } = useSession();
+  const [account, setAccount] = useState<PlayerAccount | null>(null);
+  const [initialCollection, setInitialCollection] =
+    useState<InitialCollectionDelivery | null>(null);
 
-  const enter = useCallback((next: Account) => {
-    saveCurrentAccount(next);
-    setAccount(next);
-  }, []);
+  const enter = useCallback(
+    (session: PlayerSession) => {
+      setToken(session.access_token, session.expires_at);
+      setAccount(session.player);
+      setInitialCollection(session.initial_collection);
+    },
+    [setToken],
+  );
 
-  const register = useCallback<AccountValue["register"]>(
-    async (input) => enter(await registerAccount(input)),
-    [enter],
-  );
-  const logIn = useCallback<AccountValue["logIn"]>(
-    async (email, password) => enter(await verifyAccount(email, password)),
-    [enter],
-  );
-  // También se quita el token: quien entre después no debe heredar ese acceso.
   const logOut = useCallback(() => {
-    saveCurrentAccount(null);
     clearToken();
     setAccount(null);
+    setInitialCollection(null);
   }, [clearToken]);
 
   const value = useMemo(
-    () => ({ account, register, logIn, logOut }),
-    [account, register, logIn, logOut],
+    () => ({ account: hasToken ? account : null, initialCollection, enter, logOut }),
+    [account, hasToken, initialCollection, enter, logOut],
   );
   return <AccountContext.Provider value={value}>{children}</AccountContext.Provider>;
 }
