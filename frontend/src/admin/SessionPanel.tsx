@@ -3,12 +3,12 @@ import { useState, type FormEvent } from "react";
 import { useSession } from "../session/SessionContext";
 import { Button } from "../ui";
 
-/**
- * Sesión de desarrollo: se pega el token de un administrador. Se reemplaza por el
- * inicio de sesión real cuando exista la historia de Sesiones.
+/*
+ * Token de desarrollo: se pega el de un administrador y es lo que da acceso a la API.
+ * Se reemplaza por el inicio de sesión real cuando exista la historia de Sesiones.
  */
 export function SessionPanel() {
-  const { hasToken, setToken, clearToken } = useSession();
+  const { hasToken, setToken } = useSession();
   const [draft, setDraft] = useState("");
 
   function save(event: FormEvent) {
@@ -17,16 +17,8 @@ export function SessionPanel() {
     setDraft("");
   }
 
-  if (hasToken) {
-    return (
-      <div className="session">
-        <span className="session__status">Sesión de desarrollo activa</span>
-        <Button variant="secondary" onClick={clearToken}>
-          Cerrar sesión
-        </Button>
-      </div>
-    );
-  }
+  // Con un token cargado no hay nada que mostrar: se quita al cerrar sesión.
+  if (hasToken) return null;
 
   return (
     <form className="session" onSubmit={save}>

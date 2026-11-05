@@ -6,6 +6,7 @@ import type { CreateCardResult } from "../../api/types";
 import { useSession } from "../../session/SessionContext";
 import { Alert, Button, Spinner } from "../../ui";
 import { accessDeniedMessage } from "../accessMessages";
+import { BackToMenu } from "../BackToMenu";
 import {
   EMPTY_CARD_FORM,
   formFieldFromApi,
@@ -172,6 +173,7 @@ export function CreateCardPage({ readImageSize }: Props) {
             <Button variant="secondary" onClick={reload}>
               Reintentar
             </Button>
+            <BackToMenu />
           </div>
         </>
       )}
@@ -194,6 +196,7 @@ export function CreateCardPage({ readImageSize }: Props) {
               </Alert>
               <div className="form__actions">
                 <Button onClick={createAnother}>Crear otra carta</Button>
+                <BackToMenu />
               </div>
             </div>
           ) : (

@@ -10,6 +10,7 @@ import {
   TextAreaField,
   TextField,
 } from "../../ui";
+import { BackToMenu } from "../BackToMenu";
 import { LOCATION_IMAGE } from "./locationImageRules";
 import {
   CARD_LIMIT_RANGE,
@@ -306,6 +307,7 @@ export const CreateLocationForm = forwardRef<HTMLDivElement, Props>(
           <Button type="submit" busy={submitting}>
             {submitting ? "Creando ubicación…" : "Crear ubicación"}
           </Button>
+          <BackToMenu />
         </div>
       </form>
     );

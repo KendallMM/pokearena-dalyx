@@ -2,17 +2,16 @@ import { useEffect, useState } from "react";
 import { NavLink, Outlet } from "react-router-dom";
 
 import logo from "../../images/pokeball.png";
-import { ThemeToggle } from "../ui";
+import { useAccount } from "../session/AccountContext";
+import { Button, ThemeToggle } from "../ui";
+import { MENU_OPTIONS } from "./menuOptions";
 import { SessionPanel } from "./SessionPanel";
 
 /*
  * Estructura común de la App Web del Administrador. Para agregar una pantalla:
- * crea su carpeta en admin/, agrega su ruta en App.tsx y su enlace en `links`.
+ * crea su carpeta en admin/, agrega su ruta en App.tsx y su opción en `menuOptions.ts`.
  */
-const links = [
-  { to: "/admin/cartas/nueva", label: "Crear carta" },
-  { to: "/admin/ubicaciones/nueva", label: "Crear ubicación" },
-];
+const links = [{ to: "/menu", label: "Menú principal" }, ...MENU_OPTIONS];
 
 function Brand() {
   return (
@@ -27,6 +26,7 @@ function Brand() {
 }
 
 export function AdminLayout() {
+  const { logOut } = useAccount();
   const [menuOpen, setMenuOpen] = useState(false);
 
   useEffect(() => {
@@ -75,6 +75,11 @@ export function AdminLayout() {
               ))}
             </ul>
           </nav>
+          <div className="menu-panel__footer">
+            <Button variant="secondary" onClick={logOut}>
+              Cerrar sesión
+            </Button>
+          </div>
         </div>
       </header>
       <main id="main" className="layout__main">

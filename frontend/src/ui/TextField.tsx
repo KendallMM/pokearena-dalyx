@@ -13,6 +13,7 @@ interface Props {
   type?: HTMLInputTypeAttribute;
   inputMode?: "text" | "numeric";
   maxLength?: number;
+  autoComplete?: string;
   disabled?: boolean;
 }
 
@@ -27,6 +28,7 @@ export function TextField({
   type = "text",
   inputMode,
   maxLength,
+  autoComplete,
   disabled,
 }: Props) {
   return (
@@ -38,6 +40,7 @@ export function TextField({
           type={type}
           inputMode={inputMode}
           maxLength={maxLength}
+          autoComplete={autoComplete}
           value={value}
           disabled={disabled}
           onChange={(event) => onChange(event.target.value)}

@@ -2,6 +2,7 @@ import { forwardRef, type FormEvent } from "react";
 
 import type { References } from "../../api/types";
 import { Alert, Button, ImageField, SelectField, TextField } from "../../ui";
+import { BackToMenu } from "../BackToMenu";
 import {
   COST_RANGE,
   NAME_MAX_LENGTH,
@@ -188,6 +189,7 @@ export const CreateCardForm = forwardRef<HTMLDivElement, Props>(function CreateC
         <Button type="submit" busy={submitting}>
           {submitting ? "Creando carta…" : "Crear carta"}
         </Button>
+        <BackToMenu />
       </div>
     </form>
   );

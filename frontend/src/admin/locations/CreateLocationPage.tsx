@@ -6,6 +6,7 @@ import type { CreateLocationResult } from "../../api/types";
 import { useSession } from "../../session/SessionContext";
 import { Alert, Button, Spinner } from "../../ui";
 import { accessDeniedMessage } from "../accessMessages";
+import { BackToMenu } from "../BackToMenu";
 import type { ImageSize } from "../cards/imageRules";
 import { useOperationKey } from "../cards/operationId";
 import { useReferences } from "../cards/useReferences";
@@ -207,6 +208,7 @@ export function CreateLocationPage({ readImageSize }: Props) {
             <Button variant="secondary" onClick={reload}>
               Reintentar
             </Button>
+            <BackToMenu />
           </div>
         </>
       )}
@@ -229,6 +231,7 @@ export function CreateLocationPage({ readImageSize }: Props) {
               </Alert>
               <div className="form__actions">
                 <Button onClick={createAnother}>Crear otra ubicación</Button>
+                <BackToMenu />
               </div>
             </div>
           ) : (
