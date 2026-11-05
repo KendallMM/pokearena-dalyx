@@ -1,7 +1,7 @@
 Frontend de Poké-Arena
 ======================
 
-Interfaz web del administrador de contenido. Por ahora tiene la pantalla **Crear carta**.
+Interfaz web del administrador de contenido. Por ahora tiene las pantallas **Crear carta** y **Crear ubicación**.
 
 Cómo correrlo
 -------------
@@ -40,10 +40,11 @@ Estructura
 
 | Carpeta | Para qué sirve |
 | --- | --- |
-| `src/ui/` | Componentes básicos reutilizables (campos, botones, alertas). No conocen la API. |
+| `src/ui/` | Componentes reutilizables (campos, botones, alertas, `GameCard`, `ThemeToggle`). No conocen la API. |
 | `src/api/` | Cliente HTTP único y un archivo por recurso (`cards.ts`, `references.ts`). Maneja el token, el ETag y el formato de error. |
 | `src/session/` | Token de la sesión. |
 | `src/admin/` | Pantallas del administrador, una carpeta por funcionalidad. |
+| `src/game/` | Pantalla de partida (`/partida`). Por ahora solo el diseño, con datos de ejemplo. |
 | `src/test/` | Preparación de las pruebas y datos falsos. |
 
 Cómo agregar una pantalla

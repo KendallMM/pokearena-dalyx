@@ -9,7 +9,10 @@ import { SessionPanel } from "./SessionPanel";
  * Estructura común de la App Web del Administrador. Para agregar una pantalla:
  * crea su carpeta en admin/, agrega su ruta en App.tsx y su enlace en `links`.
  */
-const links = [{ to: "/admin/cartas/nueva", label: "Crear carta" }];
+const links = [
+  { to: "/admin/cartas/nueva", label: "Crear carta" },
+  { to: "/admin/ubicaciones/nueva", label: "Crear ubicación" },
+];
 
 function Brand() {
   return (

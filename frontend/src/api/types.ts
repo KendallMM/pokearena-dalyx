@@ -1,6 +1,6 @@
-/** Tipos del contrato de la API. Se agregan aquí al conectar cada pantalla. */
+/* Tipos del contrato de la API. Se agregan aquí al conectar cada pantalla. */
 
-/** Forma de toda respuesta de error de la API. */
+/* Forma de toda respuesta de error de la API. */
 export interface ApiErrorBody {
   code: string;
   message: string;
@@ -21,18 +21,34 @@ export interface Rarity {
 export interface Ability {
   code: string;
   name: string;
-  /** Código del tipo al que afecta. Nulo significa todos los tipos. */
+  /* Código del tipo al que afecta. Nulo significa todos los tipos. */
   affected_card_type: string | null;
 }
 
-/** GET /admin/referencias (los efectos de ubicación los usará la pantalla de ubicaciones). */
+export interface EffectParameter {
+  name: string;
+  kind: "integer" | "card_type" | "integer_list";
+  required: boolean;
+  /* Mínimo y máximo permitidos, si aplican. */
+  minimum: number | null;
+  maximum: number | null;
+}
+
+export interface LocationEffectType {
+  code: string;
+  name: string;
+  parameters: EffectParameter[];
+}
+
+/* GET /admin/referencias */
 export interface References {
   card_types: CardType[];
   rarities: Rarity[];
   abilities: Ability[];
+  location_effect_types: LocationEffectType[];
 }
 
-/** Datos del formulario de Crear carta, ya validados. */
+/* Datos del formulario de Crear carta, ya validados. */
 export interface CreateCardInput {
   name: string;
   cost: number;
@@ -43,11 +59,37 @@ export interface CreateCardInput {
   image: File;
 }
 
-/** Respuesta 202 de POST /admin/cartas. */
+/* Respuesta 202 de POST /admin/cartas. */
 export interface CreateCardResult {
   code: string;
   status: string;
   message: string;
-  /** Verdadero si la API devolvió la respuesta guardada de una operación repetida. */
+  /* Verdadero si la API devolvió la respuesta guardada de una operación repetida. */
+  replayed: boolean;
+}
+
+export type EnergyMode = "fixed" | "per_card";
+
+/* Datos del formulario de Crear ubicación, ya validados. */
+export interface CreateLocationInput {
+  name: string;
+  description: string;
+  cardLimit: number;
+  energyMode: EnergyMode;
+  energyAmount: number;
+  /* Nulo significa que la ubicación no tiene efecto. */
+  effect: {
+    type: string;
+    parameters: Record<string, string | number | number[]>;
+  } | null;
+  image: File;
+}
+
+/* Respuesta 202 de POST /admin/ubicaciones. */
+export interface CreateLocationResult {
+  id: number;
+  status: string;
+  message: string;
+  /* Verdadero si la API devolvió la respuesta guardada de una operación repetida. */
   replayed: boolean;
 }

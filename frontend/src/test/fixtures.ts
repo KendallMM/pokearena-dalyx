@@ -1,7 +1,7 @@
 import { vi } from "vitest";
 
 import type { ApiServices } from "../api/ApiContext";
-import type { CreateCardResult, References } from "../api/types";
+import type { CreateCardResult, CreateLocationResult, References } from "../api/types";
 
 export const REFERENCES: References = {
   card_types: [
@@ -16,6 +16,7 @@ export const REFERENCES: References = {
     { code: "HAB-000", name: "Sin Habilidad", affected_card_type: null },
     { code: "HAB-001", name: "Marea", affected_card_type: "AGU" },
   ],
+  location_effect_types: [],
 };
 
 export const CREATED: CreateCardResult = {
@@ -25,14 +26,23 @@ export const CREATED: CreateCardResult = {
   replayed: false,
 };
 
-/** Servicios falsos: cada prueba decide qué responden. */
+const LOCATION_CREATED: CreateLocationResult = {
+  id: 41,
+  status: "pending_thumbnail",
+  message: "Ubicación en proceso",
+  replayed: false,
+};
+
+/* Servicios falsos: cada prueba decide qué responden. */
 export function fakeServices(): ApiServices & {
   references: { load: ReturnType<typeof vi.fn> };
   cards: { create: ReturnType<typeof vi.fn> };
+  locations: { create: ReturnType<typeof vi.fn> };
 } {
   return {
     references: { load: vi.fn().mockResolvedValue(REFERENCES) },
     cards: { create: vi.fn().mockResolvedValue(CREATED) },
+    locations: { create: vi.fn().mockResolvedValue(LOCATION_CREATED) },
   };
 }
 
