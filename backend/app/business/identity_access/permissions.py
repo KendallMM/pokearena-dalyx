@@ -10,10 +10,11 @@ class Permission(str, Enum):
     """Operaciones que requieren permiso."""
 
     MANAGE_CATALOG = "manage_catalog"
+    PLAY = "play"
 
 
 ROLE_PERMISSIONS: dict[Role, frozenset[Permission]] = {
-    Role.PLAYER: frozenset(),
+    Role.PLAYER: frozenset({Permission.PLAY}),
     Role.CONTENT_ADMIN: frozenset({Permission.MANAGE_CATALOG}),
     Role.PARTNER_ADMIN: frozenset(),
 }

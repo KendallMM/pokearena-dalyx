@@ -1,0 +1,30 @@
+# Entorno exclusivo de pruebas: no monta ni modifica las bases de desarrollo.
+services:
+  mysql-test:
+    image: mysql:8.4
+    environment:
+      MYSQL_DATABASE: pokearena_auth_test
+      MYSQL_USER: test
+      MYSQL_PASSWORD: test-only-password
+      MYSQL_RANDOM_ROOT_PASSWORD: "yes"
+    tmpfs:
+      - /var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 2s
+      timeout: 5s
+      retries: 60
+
+  backend-test:
+    build:
+      context: ./backend
+      target: test
+    environment:
+      TEST_MYSQL_URL: mysql+pymysql://test:test-only-password@mysql-test:3306/pokearena_auth_test
+    depends_on:
+      mysql-test:
+        condition: service_healthy
+
+  frontend-test:
+    build: ./frontend
+    command: ["sh", "-c", "npm test && npm run typecheck && npm run format:check && npm run build"]

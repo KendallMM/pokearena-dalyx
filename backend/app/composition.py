@@ -5,7 +5,11 @@ from dataclasses import dataclass
 from pymongo import MongoClient
 from redis import Redis
 
-from app.api.gateway.authentication import TokenValidator
+from app.api.gateway.authentication import TokenIssuer, TokenValidator
+from app.api.gateway.google_verifier import GoogleTokenVerifier
+from app.business.collection.initial_collection import InitialCollectionService
+from app.business.identity_access.session_service import SessionService
+from app.business.identity_access.ports import LoginChallengeStore, PlayerRepository
 from app.business.automatic_tasks.scheduler import Scheduler
 from app.business.automatic_tasks.thumbnail_job import ThumbnailJob
 from app.business.catalog.content.cards.card_service import CardService
@@ -17,6 +21,7 @@ from app.business.image_processing.image_processor import ImageProcessor
 from app.business.shared.ports import IdempotencyStore
 from app.config.settings import Settings
 from app.persistence.cache.repeated_requests import RedisIdempotencyStore
+from app.persistence.cache.login_challenges import RedisLoginChallengeStore
 from app.persistence.documents.image_repository import MongoImageStore
 from app.persistence.integrations.system_clock import SystemClock
 from app.persistence.relational.card_repository import SqlCardRepository
@@ -24,6 +29,10 @@ from app.persistence.relational.card_search_repository import SqlCardSearchRepos
 from app.persistence.relational.database import build_session_factory
 from app.persistence.relational.location_repository import SqlLocationRepository
 from app.persistence.relational.reference_repository import SqlReferenceRepository
+from app.persistence.relational.player_repository import SqlPlayerRepository
+from app.persistence.relational.initial_collection_repository import (
+    SqlInitialCollectionRepository,
+)
 
 
 @dataclass(frozen=True)
@@ -38,6 +47,11 @@ class Container:
     location_service: LocationService
     card_search_service: CardSearchService
     scheduler: Scheduler | None = None
+    session_service: SessionService | None = None
+    initial_collection_service: InitialCollectionService | None = None
+    players: PlayerRepository | None = None
+    login_challenges: LoginChallengeStore | None = None
+    token_issuer: TokenIssuer | None = None
 
 
 def build_container(settings: Settings) -> Container:
@@ -47,6 +61,15 @@ def build_container(settings: Settings) -> Container:
     images = MongoClient(settings.mongo_url)[settings.mongo_database]["images"]
     image_store = MongoImageStore(images)
     clock = SystemClock()
+    redis_client = Redis.from_url(settings.redis_url, decode_responses=True)
+    players = SqlPlayerRepository(session_factory)
+    collections = InitialCollectionService(
+        SqlInitialCollectionRepository(session_factory),
+        clock,
+        tuple(settings.initial_card_codes),
+        settings.initial_cubes,
+        retry_seconds=settings.initial_collection_retry_seconds,
+    )
     thumbnail_policy = ThumbnailPolicy(
         batch_size=settings.thumbnail_batch_size,
         lease_seconds=settings.thumbnail_lease_seconds,
@@ -78,6 +101,7 @@ def build_container(settings: Settings) -> Container:
             [
                 ThumbnailJob(card_service, "card_thumbnails"),
                 ThumbnailJob(location_service, "location_thumbnails"),
+                collections,
             ],
             settings.thumbnail_interval_seconds,
         )
@@ -92,12 +116,25 @@ def build_container(settings: Settings) -> Container:
             issuer=settings.jwt_issuer,
             audience=settings.jwt_audience,
         ),
-        idempotency_store=RedisIdempotencyStore(
-            Redis.from_url(settings.redis_url, decode_responses=True)
-        ),
+        idempotency_store=RedisIdempotencyStore(redis_client),
         reference_service=reference_service,
         card_service=card_service,
         location_service=location_service,
         card_search_service=card_search_service,
         scheduler=scheduler,
+        session_service=SessionService(
+            GoogleTokenVerifier(
+                settings.google_client_id, settings.google_timeout_seconds
+            ),
+            players,
+        ),
+        initial_collection_service=collections,
+        players=players,
+        login_challenges=RedisLoginChallengeStore(redis_client),
+        token_issuer=TokenIssuer(
+            settings.jwt_secret,
+            settings.jwt_issuer,
+            settings.jwt_audience,
+            settings.jwt_expiration_minutes,
+        ),
     )
