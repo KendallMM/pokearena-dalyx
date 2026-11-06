@@ -1,3 +1,4 @@
+import { BackToMenu } from "../admin/BackToMenu";
 import {
   EXAMPLE_MATCH,
   formatTime,
@@ -97,9 +98,7 @@ export function MatchPage({ match = EXAMPLE_MATCH }: { match?: MatchView }) {
         </p>
         {match.rival.confirmed && <p>Ya confirmó</p>}
         <p>Apuesta: {match.betCubes} cubos</p>
-        <a className="button button--secondary back-button" href="/menu">
-          Regresar
-        </a>
+        <BackToMenu />
       </header>
 
       <div className="match-board">

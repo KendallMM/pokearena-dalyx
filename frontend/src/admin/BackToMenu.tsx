@@ -1,8 +1,10 @@
+import { Link } from "react-router-dom";
+
 /* Botón para volver al menú principal, a la derecha en la línea de acciones. */
 export function BackToMenu() {
   return (
-    <a className="button button--secondary back-button" href="/menu">
+    <Link className="button button--secondary back-button" to="/menu">
       Regresar
-    </a>
+    </Link>
   );
 }

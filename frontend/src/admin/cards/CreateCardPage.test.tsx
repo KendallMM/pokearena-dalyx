@@ -1,5 +1,6 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { MemoryRouter } from "react-router-dom";
 import { describe, expect, it } from "vitest";
 
 import { ApiServicesProvider } from "../../api/ApiContext";
@@ -19,7 +20,9 @@ function setup(
   render(
     <SessionProvider>
       <ApiServicesProvider services={services}>
-        <CreateCardPage readImageSize={readImageSize} />
+        <MemoryRouter>
+          <CreateCardPage readImageSize={readImageSize} />
+        </MemoryRouter>
       </ApiServicesProvider>
     </SessionProvider>,
   );
