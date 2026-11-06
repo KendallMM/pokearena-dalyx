@@ -23,7 +23,9 @@ interface AccountValue {
 
 const AccountContext = createContext<AccountValue | null>(null);
 
-/* La cuenta y el bearer provienen siempre del mismo inicio de sesión real. */
+/* App del jugador, mensajes 38–39: conserva el resultado del backend en memoria.
+ * La cuenta, su rol y el bearer provienen del mismo inicio de sesión verificado.
+ */
 export function AccountProvider({ children }: { children: ReactNode }) {
   const { clearToken, setToken, hasToken } = useSession();
   const [account, setAccount] = useState<PlayerAccount | null>(null);
@@ -32,6 +34,7 @@ export function AccountProvider({ children }: { children: ReactNode }) {
 
   const enter = useCallback(
     (session: PlayerSession) => {
+      // Se usa access_token de Poké-Arena; la identidad de Google ya fue intercambiada.
       setToken(session.access_token, session.expires_at);
       setAccount(session.player);
       setInitialCollection(session.initial_collection);

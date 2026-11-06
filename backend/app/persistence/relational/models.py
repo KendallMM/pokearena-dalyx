@@ -126,7 +126,10 @@ class LocationRow(Base):
 
 
 class PlayerRow(Base):
-    """Cuenta interna; el correo no es una clave de identidad."""
+    """MySQL, mensaje 28: cuenta persistente con rol y Elo iniciales.
+
+    Esta tabla guarda jugadores; las credenciales JWT se emiten por separado.
+    """
 
     __tablename__ = "players"
     __table_args__ = (CheckConstraint("cubes >= 0", name="ck_players_cubes"),)
@@ -141,10 +144,12 @@ class PlayerRow(Base):
 
 
 class ExternalIdentityRow(Base):
-    """Identificador del proveedor sensible a mayúsculas, también en MySQL."""
+    """MySQL, mensajes 24 y 29: asociación estable y única proveedor/sub."""
 
     __tablename__ = "external_identities"
     __table_args__ = (
+        # La base de datos impide duplicados incluso si dos solicitudes vieron
+        # que la identidad no existía. Buscar antes de insertar no basta.
         UniqueConstraint(
             "provider", "subject", name="uq_external_identities_provider_subject"
         ),

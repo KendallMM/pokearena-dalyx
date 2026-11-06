@@ -1,4 +1,8 @@
-"""Entrega inicial atómica: cartas, cubos y confirmación comparten transacción."""
+"""Persistencia del participante Colección Inicial, detrás de los mensajes 34–35.
+
+MySQL confirma cartas, cubos y recibo en una sola transacción. El login solo
+consume el resultado; estos detalles pertenecen a la User Story de colección.
+"""
 
 from datetime import datetime, timedelta
 
@@ -35,6 +39,8 @@ class SqlInitialCollectionRepository:
         now_utc = naive_utc(now)
         try:
             with self._session_factory.begin() as session:
+                # El UPDATE toma el bloqueo de esta entrega hasta commit/rollback.
+                # Otra solicitud debe esperar y luego comprobar su estado actual.
                 claimed = session.execute(
                     update(InitialCollectionDeliveryRow)
                     .where(
@@ -53,6 +59,7 @@ class SqlInitialCollectionRepository:
                     )
                 ).one()
                 if delivery.status == "delivered":
+                    # La recompensa ya está confirmada; este ingreso no suma otra.
                     return DeliveryResult(
                         DeliveryStatus.ALREADY_DELIVERED,
                         "Ya recibiste tu colección inicial.",
@@ -92,6 +99,8 @@ class SqlInitialCollectionRepository:
                 DeliveryStatus.UNAVAILABLE,
                 "La colección inicial aún no está disponible. La recibirás automáticamente cuando esté lista.",
             )
+        # Las tres escrituras son indivisibles: posesiones, saldo y recibo.
+        # Un fallo al confirmar revierte todas y conserva el pendiente original.
         session.add_all(
             [
                 PlayerCardRow(player_id=delivery.player_id, card_id=card_id, quantity=1)

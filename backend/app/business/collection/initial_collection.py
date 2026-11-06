@@ -1,4 +1,9 @@
-"""Entrega inicial idempotente y reintento de solicitudes persistidas."""
+"""Participante Colección Inicial (Colección y Mazos): mensajes 34–35.
+
+Es la base funcional de otra User Story: recibe un jugador ya autenticado y
+devuelve el resultado de su entrega. Las reglas detalladas de colección deberán
+validarse con el diagrama y los criterios propios de esa historia.
+"""
 
 import logging
 from dataclasses import dataclass
@@ -13,7 +18,7 @@ logger = logging.getLogger(__name__)
 
 
 class DeliveryStatus(str, Enum):
-    """Resultados contemplados por el diagrama de inicio de sesión."""
+    """Mensaje 35: entregada, entrega previa, indisponible o pendiente."""
 
     DELIVERED = "delivered"
     ALREADY_DELIVERED = "already_delivered"
@@ -80,6 +85,8 @@ class InitialCollectionService:
                 self._retry_seconds,
             )
         except ServiceUnavailableError:
+            # La solicitud ya existe en MySQL: informar pending permite entrar
+            # al juego mientras el planificador reintenta la entrega por separado.
             logger.warning("Colección inicial pendiente; se reintentará la entrega")
             return DeliveryResult(
                 DeliveryStatus.PENDING,

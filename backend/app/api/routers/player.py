@@ -1,4 +1,9 @@
-"""API del jugador: inicio de sesión, entrega inicial y cuenta propia."""
+"""Participante API del jugador: recibe HTTP y coordina los mensajes 8 y 33–38.
+
+Sesiones identifica al jugador, Colección entrega la recompensa y el componente
+de autenticación del gateway emite la credencial interna. Aquí se conectan esas
+responsabilidades; sus reglas permanecen en los componentes correspondientes.
+"""
 
 import secrets
 from dataclasses import asdict
@@ -70,7 +75,11 @@ def create_google_challenge(
     response: Response,
     challenges: LoginChallengeStore = Depends(get_challenges),
 ) -> GoogleChallengeResponse:
-    """No crea cuentas; vincula un nonce efímero al navegador que lo solicitó."""
+    """Prepara el nonce que vincula el token de Google al navegador solicitante.
+
+    Es una protección adicional al flujo numerado: todavía no autentica ni crea
+    al jugador. El POST consumirá este desafío una sola vez.
+    """
     settings = request.app.state.settings
     if not settings.google_client_id:
         raise IdentityProviderUnavailableError(
@@ -114,7 +123,7 @@ def sign_in_google(
     challenges: LoginChallengeStore = Depends(get_challenges),
     issuer: TokenIssuer = Depends(get_token_issuer),
 ) -> SessionResponse:
-    """Autentica, coordina la entrega y deja la emisión al gateway."""
+    """Atiende la ruta pública del mensaje 6 y coordina el flujo de acceso."""
     nonce = request.cookies.get(CHALLENGE_COOKIE, "")
     origin = request.headers.get("origin")
     if (
@@ -126,14 +135,20 @@ def sign_in_google(
         raise NotAuthenticatedError(
             "El intento de inicio de sesión venció. Inténtalo de nuevo."
         )
+    # Mensajes 8 y 33: solo una identidad verificada permite obtener al jugador.
+    # Los errores interrumpen aquí el flujo antes de entregar o emitir credenciales.
     player = sessions.sign_in(body.credential, nonce)
+    # Mensajes 34–35: la API invoca Colección, responsabilidad de su propia HU.
+    # Su resultado pendiente/no disponible se comunica junto al acceso exitoso.
     delivery = collections.deliver(player.id)
     # El saldo puede haber cambiado durante la entrega.
     player = players.get(player.id)
+    # Mensajes 36–37: el emisor del gateway recibe la identidad interna y su rol.
     credential = issuer.issue(player)
     response.headers["Cache-Control"] = "no-store"
     response.headers["Pragma"] = "no-cache"
     response.delete_cookie(CHALLENGE_COOKIE)
+    # Mensaje 38: la app recibe JWT propio, cuenta y estado de la entrega.
     return SessionResponse(
         **asdict(credential),
         player=asdict(player),

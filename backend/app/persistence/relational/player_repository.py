@@ -1,4 +1,8 @@
-"""Jugadores en MySQL con creación transaccional y recuperación de carreras."""
+"""Participante Repositorio de jugadores: mensajes 23–32 del diagrama.
+
+Encapsula las consultas e inserciones en MySQL. La restricción de identidad
+estable y la transacción, juntas, resuelven los primeros ingresos simultáneos.
+"""
 
 from uuid import uuid4
 
@@ -28,7 +32,7 @@ class SqlPlayerRepository:
         self._session_factory = session_factory
 
     def find_by_identity(self, provider: str, subject: str) -> Player | None:
-        """Consulta la identidad externa mediante el índice único compuesto."""
+        """Mensajes 24–26: busca por proveedor/sub y devuelve jugador o ausencia."""
         try:
             with self._session_factory() as session:
                 row = session.scalar(
@@ -48,6 +52,8 @@ class SqlPlayerRepository:
     def create(self, identity: ExternalIdentity) -> Player:
         """Revierte también el jugador perdedor antes de consultar al ganador."""
         try:
+            # Mensajes 27–28: cuenta, identidad y solicitud de recompensa se confirman
+            # juntas. Si falla cualquier INSERT, se revierte también el jugador.
             with self._session_factory.begin() as session:
                 row = PlayerRow(
                     id=str(uuid4()),
@@ -66,11 +72,13 @@ class SqlPlayerRepository:
                         subject=identity.subject,
                     )
                 )
+                # Guarda la solicitud pendiente; entregar corresponde a Colección.
                 session.add(InitialCollectionDeliveryRow(player_id=row.id))
                 session.flush()
                 return to_player(row)
         except IntegrityError:
-            # Nueva sesión/transacción: evita la instantánea anterior de MySQL.
+            # Alt, mensajes 29–31: otro ingreso pudo ganar la restricción UNIQUE.
+            # La transacción perdedora ya se revirtió; una nueva lectura ve al ganador.
             winner = self.find_by_identity(identity.provider, identity.subject)
             if winner is not None:
                 return winner

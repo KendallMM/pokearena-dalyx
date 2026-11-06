@@ -1,4 +1,8 @@
-"""Verificación de Google con PyJWT y claves oficiales con caché acotada."""
+"""Participante Verificador de Google: mensajes 9–22 del diagrama.
+
+Google es el sistema externo que firma la identidad. Este adaptador comprueba
+esa firma y devuelve una identidad verificada; Sesiones decide qué cuenta usar.
+"""
 
 import json
 import re
@@ -26,7 +30,7 @@ class GoogleJwkClient(jwt.PyJWKClient):
         super().__init__(GOOGLE_JWKS_URL, cache_keys=False, timeout=timeout_seconds)
 
     def fetch_data(self) -> dict[str, Any]:
-        """Descarga solo del origen fijo de Google y valida el juego de claves."""
+        """Mensajes 10 y 16: obtiene claves vigentes del origen fijo de Google."""
         try:
             with urlopen(Request(GOOGLE_JWKS_URL), timeout=self.timeout) as response:
                 data = json.load(response)
@@ -57,6 +61,7 @@ class GoogleJwkClient(jwt.PyJWKClient):
                     self.jwk_set_cache.put(data)
                 return data
         except (OSError, ValueError, TypeError, KeyError, jwt.PyJWTError) as exc:
+            # Break, mensajes 11–15: no poder verificar por falta de claves es 503.
             # El mensaje público y los logs nunca contienen el token ni la respuesta.
             raise IdentityProviderUnavailableError(
                 "Google no está disponible para verificar tu identidad. Inténtalo de nuevo."
@@ -80,11 +85,14 @@ class GoogleTokenVerifier:
         try:
             if len(credential) > 16384:
                 raise jwt.InvalidTokenError()
+            # Se lee solo la cabecera para elegir la clave; esto aún no autentica.
             header = jwt.get_unverified_header(credential)
             if header.get("alg") != "RS256" or not isinstance(header.get("kid"), str):
                 raise jwt.InvalidTokenError()
             with self._key_lock:
                 key = self._keys.get_signing_key_from_jwt(credential)
+            # Mensaje 17: decode verifica realmente firma, tiempos, emisor y audiencia.
+            # El algoritmo permitido es fijo; el token recibido no puede elegirlo.
             claims = jwt.decode(
                 credential,
                 key.key,
@@ -95,9 +103,11 @@ class GoogleTokenVerifier:
             )
             self._validate_identity(claims, nonce)
         except (jwt.PyJWTError, ValueError, TypeError) as exc:
+            # Alt, mensajes 18–21: identidad inválida produce 401, sin crear cuenta.
             raise NotAuthenticatedError(
                 "La identidad de Google no es válida o ya venció. Inicia sesión de nuevo."
             ) from exc
+        # Mensaje 22: solo los datos ya verificados pasan al Servicio de Sesiones.
         return ExternalIdentity(
             provider="google",
             subject=claims["sub"],

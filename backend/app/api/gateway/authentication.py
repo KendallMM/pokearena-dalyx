@@ -1,4 +1,8 @@
-"""Autenticación: valida el JWT propio de Poké-Arena y comprueba permisos."""
+"""Participante API Gateway: emite credenciales en el mensaje 37 y las autoriza.
+
+La emisión y validación usan identidad y rol internos de Poké-Arena. Las siguientes
+solicitudes se validan aquí sin volver a consultar al proveedor externo.
+"""
 
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
@@ -42,6 +46,8 @@ class TokenIssuer:
         """Representa al jugador interno y su rol, con vencimiento configurable."""
         now = datetime.now(timezone.utc)
         expires_at = now + self._lifetime
+        # Mensaje 37: sub es el ID de players, distinto del sub externo de Google.
+        # El rol procede de la cuenta persistida y define los permisos posteriores.
         token = jwt.encode(
             {
                 "sub": player.id,
@@ -73,6 +79,8 @@ class TokenValidator:
     def validate(self, token: str) -> Actor:
         """Devuelve el actor del token o lanza NotAuthenticatedError."""
         try:
+            # Nota final del diagrama: la firma, emisor y audiencia exigidos son
+            # los propios; presentar directamente un ID token de Google no autoriza.
             claims = jwt.decode(
                 token,
                 self._secret,

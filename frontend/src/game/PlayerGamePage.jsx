@@ -2,7 +2,10 @@ import { useAccount } from "../session/AccountContext";
 import { Alert, Button } from "../ui";
 import { MatchPage } from "./MatchPage";
 
-/** Conserva la partida existente y comunica el resultado de la entrega inicial. */
+/**
+ * App del jugador, mensaje 39: permite entrar y comunica el resultado de Colección.
+ * Un estado pendiente/no disponible se muestra sin invalidar la autenticación.
+ */
 export function PlayerGamePage() {
   const { account, initialCollection, logOut } = useAccount();
   return (

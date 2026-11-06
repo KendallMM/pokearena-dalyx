@@ -8,7 +8,11 @@ import { useAccount } from "../session/AccountContext";
 import { Alert, Button, ThemeToggle } from "../ui";
 import { GoogleLoginCancelled, requestGoogleIdentity } from "./googleSignIn";
 
-/** Entrada real con Google; las cuentas y permisos los determina el servidor. */
+/**
+ * Participantes Jugador y App del jugador: entrada y salida del diagrama.
+ * El botón inicia el mensaje 1; la app coordina Google y la API, y muestra
+ * cancelación (4), errores (15/21) o entrada al juego (39).
+ */
 export function LoginPage() {
   const { account, enter } = useAccount();
   const { sessions } = useApi();
@@ -17,6 +21,7 @@ export function LoginPage() {
   const [submitting, setSubmitting] = useState(false);
 
   if (account) {
+    // Mensaje 39: la cuenta y su rol provienen de la respuesta de Poké-Arena.
     return <Navigate to={account.role === "player" ? "/partida" : "/menu"} replace />;
   }
 
@@ -35,13 +40,19 @@ export function LoginPage() {
     }
     setSubmitting(true);
     try {
+      // Paso adicional de seguridad: el nonce vincula Google a este intento.
       const challenge = await sessions.challenge();
+      // Mensajes 2–5: Google autentica en su ventana y devuelve la identidad.
       const credential = await requestGoogleIdentity(challenge, popup);
+      // Mensajes 6 y 38–39: intercambia identidad externa por sesión interna.
       enter(await sessions.signInGoogle(credential));
     } catch (error) {
+      // Alt, mensajes 3–4: al cancelar se omite el POST; el backend no crea cuenta.
       popup.close();
       setCancelled(error instanceof GoogleLoginCancelled);
       if (error instanceof ApiError) {
+        // Mensajes 15/21: conserva la referencia para explicar un 503 o repetir
+        // la autenticación tras un 401, sin mostrar el token al usuario.
         const detail =
           error.status === 401
             ? "Tu identidad no pudo verificarse. Inicia sesión con Google de nuevo."

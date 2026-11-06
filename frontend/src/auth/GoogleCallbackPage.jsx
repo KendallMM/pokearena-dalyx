@@ -1,9 +1,14 @@
 import { useEffect, useRef } from "react";
 
-/** Entrega el resultado solo a la ventana de origen y retira el fragmento sensible. */
+/**
+ * App del jugador, mensaje 5: recibe el regreso de Google en la ventana emergente.
+ * Retira el token del fragmento y lo entrega al origen propio. El servidor será
+ * quien verifique su firma antes de usarlo para identificar al jugador.
+ */
 export function GoogleCallbackPage() {
   const handled = useRef(false);
   useEffect(() => {
+    // Un único envío evita repetir el resultado si React vuelve a ejecutar el efecto.
     if (handled.current) return;
     handled.current = true;
     const result = new URLSearchParams(window.location.hash.slice(1));

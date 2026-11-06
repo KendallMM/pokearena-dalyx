@@ -1,4 +1,8 @@
-/** OIDC del navegador: solicita solo identidad, sin permisos para APIs de Google. */
+/**
+ * App del jugador → Google (sistema externo): mensajes 2–5 del diagrama.
+ * Google autentica al usuario; esta función recibe su resultado para que el
+ * backend compruebe después la identidad. Aquí aún no existe sesión interna.
+ */
 
 export class GoogleLoginCancelled extends Error {
   constructor() {
@@ -13,6 +17,8 @@ export class GoogleLoginCancelled extends Error {
  * @returns {Promise<string>}
  */
 export function requestGoogleIdentity(challenge, popup) {
+  // state comprueba el regreso al intento correcto; nonce viajará firmado en
+  // el token y el backend lo cotejará con su desafío de un solo uso.
   const state = crypto.randomUUID();
   const url = new URL("https://accounts.google.com/o/oauth2/v2/auth");
   url.search = new URLSearchParams({
@@ -36,6 +42,8 @@ export function requestGoogleIdentity(challenge, popup) {
     }
 
     function receive(event) {
+      // Solo se acepta el callback propio de la ventana abierta para este intento.
+      // Recibir una cadena no prueba su firma: esa comprobación es del backend.
       if (
         event.origin !== window.location.origin ||
         event.source !== popup ||
@@ -43,6 +51,7 @@ export function requestGoogleIdentity(challenge, popup) {
         event.data.state !== state
       )
         return;
+      // Rama de cancelación/rechazo del mensaje 3: termina sin intercambiar token.
       if (event.data.error === "access_denied") finish(new GoogleLoginCancelled());
       else if (event.data.error || typeof event.data.credential !== "string") {
         finish(
@@ -54,6 +63,7 @@ export function requestGoogleIdentity(challenge, popup) {
     }
 
     window.addEventListener("message", receive);
+    // Cerrar la ventana también equivale a cancelar, aunque Google no responda.
     const closedTimer = window.setInterval(() => {
       if (popup.closed) finish(new GoogleLoginCancelled());
     }, 300);
