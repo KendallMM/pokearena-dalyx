@@ -1,12 +1,11 @@
 import { useEffect, useState } from "react";
-import { NavLink, Outlet } from "react-router-dom";
+import { Navigate, NavLink, Outlet } from "react-router-dom";
 
 import mascot from "../../images/pikachu.png";
 import logo from "../../images/pokeball.png";
 import { useAccount } from "../session/AccountContext";
 import { Button, ThemeToggle } from "../ui";
 import { MENU_OPTIONS } from "./menuOptions";
-import { SessionPanel } from "./SessionPanel";
 
 /*
  * Estructura común de la App Web del Administrador. Para agregar una pantalla:
@@ -27,7 +26,7 @@ function Brand() {
 }
 
 export function AdminLayout() {
-  const { logOut } = useAccount();
+  const { account, logOut } = useAccount();
   const [menuOpen, setMenuOpen] = useState(false);
 
   useEffect(() => {
@@ -38,6 +37,10 @@ export function AdminLayout() {
     window.addEventListener("keydown", closeOnEscape);
     return () => window.removeEventListener("keydown", closeOnEscape);
   }, [menuOpen]);
+
+  if (account?.role !== "content_admin") {
+    return <Navigate to="/partida" replace />;
+  }
 
   return (
     <div className="layout">
@@ -56,7 +59,6 @@ export function AdminLayout() {
           <span aria-hidden="true">{menuOpen ? "✕" : "☰"}</span>
         </button>
         <Brand />
-        <SessionPanel />
         <img className="site-bar__mascot" src={mascot} alt="" />
         {menuOpen && (
           <div className="menu-backdrop" onClick={() => setMenuOpen(false)} />

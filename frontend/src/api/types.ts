@@ -128,3 +128,31 @@ export interface CreateLocationResult {
   /* Verdadero si la API devolvió la respuesta guardada de una operación repetida. */
   replayed: boolean;
 }
+export interface PlayerAccount {
+  id: string;
+  name: string;
+  email: string;
+  role: "player" | "content_admin" | "partner_admin";
+  elo: number;
+  cubes: number;
+}
+
+export interface InitialCollectionDelivery {
+  status: "delivered" | "already_delivered" | "unavailable" | "pending";
+  message: string;
+}
+
+export interface GoogleChallenge {
+  client_id: string;
+  nonce: string;
+  expires_in: number;
+}
+
+export interface PlayerSession {
+  access_token: string;
+  token_type: "Bearer";
+  expires_in: number;
+  expires_at: string;
+  player: PlayerAccount;
+  initial_collection: InitialCollectionDelivery;
+}

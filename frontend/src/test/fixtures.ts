@@ -47,6 +47,7 @@ export function fakeServices(): ApiServices & {
       image: vi.fn().mockResolvedValue(new Blob()),
     },
     locations: { create: vi.fn().mockResolvedValue(LOCATION_CREATED) },
+    sessions: { challenge: vi.fn(), signInGoogle: vi.fn(), me: vi.fn() },
   };
 }
 

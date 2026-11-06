@@ -15,6 +15,7 @@ from app.business.shared.errors import (
     NotAuthenticatedError,
     NotFoundError,
     PermissionDeniedError,
+    ServiceUnavailableError,
     ValidationFailedError,
 )
 
@@ -50,8 +51,10 @@ NOT_FOUND_RESPONSE: dict[int | str, dict[str, Any]] = {
     404: {"model": ErrorResponse, "description": "El recurso no existe."},
 }
 
-# El negocio no conoce HTTP: la traducción vive aquí.
+# Gateway, mensajes 14 y 20: distingue dependencia indisponible (503) de identidad
+# rechazada (401). El negocio comunica errores; esta capa decide su respuesta HTTP.
 STATUS_BY_ERROR: list[tuple[type[DomainError], int]] = [
+    (ServiceUnavailableError, 503),
     (NotAuthenticatedError, 401),
     (PermissionDeniedError, 403),
     (ValidationFailedError, 400),

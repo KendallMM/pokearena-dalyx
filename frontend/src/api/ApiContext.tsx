@@ -5,12 +5,14 @@ import { createCardsApi, type CardsApi } from "./cards";
 import { createHttpClient } from "./httpClient";
 import { createLocationsApi, type LocationsApi } from "./locations";
 import { createReferencesApi, type ReferencesApi } from "./references";
+import { createSessionsApi } from "./sessions";
 
 /* Servicios de la API que usan las pantallas. Cada pantalla pide solo los suyos. */
 export interface ApiServices {
   references: ReferencesApi;
   cards: CardsApi;
   locations: LocationsApi;
+  sessions: ReturnType<typeof createSessionsApi>;
 }
 
 const ApiContext = createContext<ApiServices | null>(null);
@@ -24,6 +26,7 @@ export function ApiProvider({ children }: { children: ReactNode }) {
       references: createReferencesApi(http),
       cards: createCardsApi(http),
       locations: createLocationsApi(http),
+      sessions: createSessionsApi(http),
     };
   }, [getToken]);
   return <ApiContext.Provider value={services}>{children}</ApiContext.Provider>;

@@ -10,9 +10,11 @@ from sqlalchemy import (
     ForeignKey,
     Index,
     String,
+    UniqueConstraint,
     func,
     text,
 )
+from sqlalchemy.dialects.mysql import VARCHAR
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 
@@ -121,3 +123,78 @@ class LocationRow(Base):
     thumbnail_attempts: Mapped[int] = mapped_column(server_default=text("0"))
     thumbnail_last_error: Mapped[str | None] = mapped_column(String(500))
     thumbnail_claimed_until: Mapped[datetime | None] = mapped_column(DateTime())
+
+
+class PlayerRow(Base):
+    """MySQL, mensaje 28: cuenta persistente con rol y Elo iniciales.
+
+    Esta tabla guarda jugadores; las credenciales JWT se emiten por separado.
+    """
+
+    __tablename__ = "players"
+    __table_args__ = (CheckConstraint("cubes >= 0", name="ck_players_cubes"),)
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    name: Mapped[str] = mapped_column(String(100))
+    email: Mapped[str] = mapped_column(String(320))
+    role: Mapped[str] = mapped_column(String(30), server_default="player")
+    elo: Mapped[int] = mapped_column(server_default=text("0"))
+    cubes: Mapped[int] = mapped_column(server_default=text("0"))
+    created_at: Mapped[datetime] = mapped_column(DateTime(), server_default=func.now())
+
+
+class ExternalIdentityRow(Base):
+    """MySQL, mensajes 24 y 29: asociación estable y única proveedor/sub."""
+
+    __tablename__ = "external_identities"
+    __table_args__ = (
+        # La base de datos impide duplicados incluso si dos solicitudes vieron
+        # que la identidad no existía. Buscar antes de insertar no basta.
+        UniqueConstraint(
+            "provider", "subject", name="uq_external_identities_provider_subject"
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    player_id: Mapped[str] = mapped_column(ForeignKey("players.id"), index=True)
+    provider: Mapped[str] = mapped_column(String(30))
+    subject: Mapped[str] = mapped_column(
+        String(255).with_variant(VARCHAR(255, collation="utf8mb4_bin"), "mysql")
+    )
+
+
+class InitialCollectionDeliveryRow(Base):
+    """Solicitud durable creada en la misma transacción que el jugador."""
+
+    __tablename__ = "initial_collection_deliveries"
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('pending', 'delivered')", name="ck_initial_delivery_status"
+        ),
+        Index("ix_initial_deliveries_retry", "status", "next_attempt_at"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    player_id: Mapped[str] = mapped_column(ForeignKey("players.id"), unique=True)
+    status: Mapped[str] = mapped_column(String(20), server_default="pending")
+    attempts: Mapped[int] = mapped_column(server_default=text("0"))
+    next_attempt_at: Mapped[datetime] = mapped_column(
+        DateTime(), server_default=func.now()
+    )
+    delivered_at: Mapped[datetime | None] = mapped_column(DateTime())
+    cubes_granted: Mapped[int | None]
+
+
+class PlayerCardRow(Base):
+    """Cartas poseídas por el jugador; el catálogo conserva la definición."""
+
+    __tablename__ = "player_cards"
+    __table_args__ = (
+        UniqueConstraint("player_id", "card_id", name="uq_player_cards_player_card"),
+        CheckConstraint("quantity > 0", name="ck_player_cards_quantity"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    player_id: Mapped[str] = mapped_column(ForeignKey("players.id"))
+    card_id: Mapped[int] = mapped_column(ForeignKey("cards.id"))
+    quantity: Mapped[int] = mapped_column(server_default=text("1"))

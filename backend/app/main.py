@@ -7,6 +7,7 @@ from fastapi import FastAPI
 
 from app.api.gateway.install import install_gateway
 from app.api.routers.admin import card_search, cards, locations, references
+from app.api.routers import player
 from app.composition import Container, build_container
 from app.config.settings import get_settings
 from app.observability.logging import configure_logging
@@ -36,11 +37,17 @@ def create_app(container: Container | None = None) -> FastAPI:
     app.state.card_service = container.card_service
     app.state.location_service = container.location_service
     app.state.card_search_service = container.card_search_service
+    app.state.session_service = container.session_service
+    app.state.initial_collection_service = container.initial_collection_service
+    app.state.players = container.players
+    app.state.login_challenges = container.login_challenges
+    app.state.token_issuer = container.token_issuer
     install_gateway(app)
     app.include_router(references.router)
     app.include_router(cards.router)
     app.include_router(card_search.router)
     app.include_router(locations.router)
+    app.include_router(player.router)
 
     @app.get("/health", tags=["Operación"], summary="Estado del servicio")
     def health() -> dict[str, str]:

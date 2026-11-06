@@ -20,6 +20,8 @@ export interface HttpClient {
     body: FormData,
     headers?: Record<string, string>,
   ): Promise<HttpResponse<T>>;
+  /** POST JSON, incluido el intercambio público del token de Google. */
+  postJson<T>(path: string, body: unknown): Promise<T>;
 }
 
 interface Options {
@@ -82,6 +84,15 @@ export function createHttpClient({
   }
 
   return {
+    async postJson<T>(path: string, body: unknown): Promise<T> {
+      const response = await send(path, {
+        method: "POST",
+        headers: { ...authHeaders(), "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      if (!response.ok) throw await toError(response);
+      return (await response.json()) as T;
+    },
     async getJson<T>(path: string): Promise<T> {
       return (await (await get(path)).json()) as T;
     },

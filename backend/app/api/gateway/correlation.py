@@ -1,4 +1,8 @@
-"""Identificador de correlación: une los logs y la respuesta de una solicitud."""
+"""API Gateway, mensaje 7: asigna la correlación antes de llegar a la API.
+
+El mismo identificador acompaña los errores 503 y 401 de los mensajes 14 y 20,
+para relacionar lo que ve el jugador con la solicitud atendida por el backend.
+"""
 
 import uuid
 

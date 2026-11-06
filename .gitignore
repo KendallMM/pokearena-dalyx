@@ -32,6 +32,7 @@ env/
 .ruff_cache/
 .vscode/
 .idea/
+.codex/
 
 # Variables de entorno y secretos
 .env

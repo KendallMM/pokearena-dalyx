@@ -40,3 +40,15 @@ class NotFoundError(DomainError):
     """El recurso pedido no existe."""
 
     code = "not_found"
+
+
+class ServiceUnavailableError(DomainError):
+    """Una dependencia no está disponible; la solicitud puede reintentarse."""
+
+    code = "service_unavailable"
+
+
+class IdentityProviderUnavailableError(ServiceUnavailableError):
+    """No se puede verificar la identidad porque el proveedor no está disponible."""
+
+    code = "identity_provider_unavailable"

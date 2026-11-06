@@ -1,4 +1,4 @@
-FROM python:3.12-slim
+FROM python:3.12-slim AS runtime
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1
@@ -18,3 +18,15 @@ USER appuser
 EXPOSE 8000
 # Aplica las migraciones pendientes y luego arranca la API.
 CMD ["sh", "-c", "alembic upgrade head && uvicorn app.main:create_app --factory --host 0.0.0.0 --port 8000"]
+
+FROM runtime AS test
+
+USER root
+COPY requirements-dev.txt .
+RUN pip install --no-cache-dir -r requirements-dev.txt
+COPY pyproject.toml .
+COPY tests ./tests
+USER appuser
+CMD ["pytest", "-q", "-p", "no:cacheprovider"]
+
+FROM runtime AS app
