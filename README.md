@@ -69,21 +69,20 @@ correspondiente en MySQL y luego volver a iniciar sesión.
 
 ### Colección y cubos iniciales
 
-Las reglas de recompensa se configuran en `.env`, sin valores ficticios:
+En su primer ingreso cada jugador recibe **15 cartas distintas de rareza Común**,
+elegidas al azar en el servidor entre las cartas disponibles del catálogo, y
+**1,000 cubos**. Son reglas del juego, no configuración.
 
-- `INITIAL_CARD_CODES`: arreglo JSON de códigos únicos de cartas reales que
-  defina el equipo de producto. Se entrega una copia de cada carta; todas deben
-  estar en estado `available`.
-- `INITIAL_CUBES`: cantidad entera no negativa; vacía significa sin configurar.
-- `INITIAL_COLLECTION_RETRY_SECONDS`: intervalo entre intentos, 60 por defecto.
-
-Si faltan reglas o cartas disponibles, el jugador entra y recibe el mensaje de
-colección no disponible o pendiente. La solicitud se guarda junto con su cuenta;
-el planificador existente la reintenta aunque no vuelva a iniciar sesión.
-Cartas, cubos y confirmación se guardan en una sola transacción. Volver a entrar
-o ejecutar dos entregas simultáneas no duplica la recompensa.
-Después de cambiar las reglas del ambiente, reconstruye/recrea el backend.
-Las reglas nuevas se aplican a entregas aún pendientes, nunca a las ya completadas.
+- Cartas, cubos, el movimiento de +1,000 en el historial de cubos
+  (`cube_movements`) y el recibo de la entrega se guardan en una sola
+  transacción: se entrega todo o nada.
+- Si el catálogo tiene menos de 15 cartas Comunes disponibles, la cuenta se crea
+  sin cartas ni cubos y el jugador ve que el juego aún no está disponible. La
+  entrega se completa en un ingreso posterior, cuando haya cartas suficientes.
+- Cada ingreso vuelve a intentar una entrega pendiente. Además, el planificador
+  la reintenta cada `INITIAL_COLLECTION_RETRY_SECONDS` (60 por defecto) aunque el
+  jugador no vuelva a entrar.
+- Volver a entrar o dos primeros ingresos simultáneos no duplican la recompensa.
 
 ### Pruebas aisladas, incluidas las de MySQL
 

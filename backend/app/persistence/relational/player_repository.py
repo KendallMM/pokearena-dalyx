@@ -4,20 +4,24 @@ Encapsula las consultas e inserciones en MySQL. La restricción de identidad
 estable y la transacción, juntas, resuelven los primeros ingresos simultáneos.
 """
 
+from datetime import datetime
 from uuid import uuid4
 
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.business.identity_access.models import ExternalIdentity, Player
 from app.business.identity_access.roles import Role
 from app.business.shared.errors import NotFoundError, ServiceUnavailableError
+from app.business.shared.ports import Transaction
+from app.persistence.relational.database import naive_utc
 from app.persistence.relational.models import (
     ExternalIdentityRow,
     InitialCollectionDeliveryRow,
     PlayerRow,
 )
+from app.persistence.relational.transactions import session_of
 
 
 def to_player(row: PlayerRow) -> Player:
@@ -101,4 +105,85 @@ class SqlPlayerRepository:
         except SQLAlchemyError as exc:
             raise ServiceUnavailableError(
                 "No se pudo consultar la cuenta. Reintenta."
+            ) from exc
+
+    def claim_initial_delivery(
+        self,
+        transaction: Transaction,
+        player_id: str,
+        now: datetime,
+        cubes: int,
+        only_if_due: bool,
+    ) -> bool:
+        """Marca la entrega como hecha solo si aún está pendiente (pasos 2–5).
+
+        El UPDATE bloquea la fila hasta el COMMIT o ROLLBACK: un ingreso
+        simultáneo espera y después ya no encuentra la entrega pendiente.
+        """
+        now_utc = naive_utc(now)
+        conditions = [
+            InitialCollectionDeliveryRow.player_id == player_id,
+            InitialCollectionDeliveryRow.status == "pending",
+        ]
+        if only_if_due:
+            # Solo el planificador espera; un ingreso del jugador siempre lo intenta.
+            conditions.append(InitialCollectionDeliveryRow.next_attempt_at <= now_utc)
+        changed = (
+            session_of(transaction)
+            .execute(
+                update(InitialCollectionDeliveryRow)
+                .where(*conditions)
+                .values(
+                    status="delivered",
+                    delivered_at=now_utc,
+                    cubes_granted=cubes,
+                    attempts=InitialCollectionDeliveryRow.attempts + 1,
+                )
+            )
+            .rowcount
+        )
+        return changed == 1
+
+    def postpone_initial_delivery(self, player_id: str, until: datetime) -> None:
+        """Registra un intento fallido y fija cuándo puede reintentar el planificador."""
+        try:
+            with self._session_factory.begin() as session:
+                session.execute(
+                    update(InitialCollectionDeliveryRow)
+                    .where(
+                        InitialCollectionDeliveryRow.player_id == player_id,
+                        InitialCollectionDeliveryRow.status == "pending",
+                    )
+                    .values(
+                        attempts=InitialCollectionDeliveryRow.attempts + 1,
+                        next_attempt_at=naive_utc(until),
+                    )
+                )
+        except SQLAlchemyError as exc:
+            raise ServiceUnavailableError(
+                "No se pudo registrar el intento de entrega."
+            ) from exc
+
+    def pending_initial_deliveries(self, now: datetime, limit: int) -> list[str]:
+        """Lee solo pendientes vencidos, usando el índice de estado y fecha."""
+        try:
+            with self._session_factory() as session:
+                return list(
+                    session.scalars(
+                        select(InitialCollectionDeliveryRow.player_id)
+                        .where(
+                            InitialCollectionDeliveryRow.status == "pending",
+                            InitialCollectionDeliveryRow.next_attempt_at
+                            <= naive_utc(now),
+                        )
+                        .order_by(
+                            InitialCollectionDeliveryRow.next_attempt_at,
+                            InitialCollectionDeliveryRow.id,
+                        )
+                        .limit(limit)
+                    )
+                )
+        except SQLAlchemyError as exc:
+            raise ServiceUnavailableError(
+                "No se pudieron consultar las entregas pendientes."
             ) from exc

@@ -12,6 +12,7 @@ from app.business.identity_access.session_service import SessionService
 from app.business.identity_access.ports import LoginChallengeStore, PlayerRepository
 from app.business.automatic_tasks.scheduler import Scheduler
 from app.business.automatic_tasks.thumbnail_job import ThumbnailJob
+from app.business.catalog.content.cards.card_availability import CardAvailability
 from app.business.catalog.content.cards.card_service import CardService
 from app.business.catalog.content.locations.location_service import LocationService
 from app.business.catalog.references.reference_service import ReferenceService
@@ -24,15 +25,16 @@ from app.persistence.cache.repeated_requests import RedisIdempotencyStore
 from app.persistence.cache.login_challenges import RedisLoginChallengeStore
 from app.persistence.documents.image_repository import MongoImageStore
 from app.persistence.integrations.system_clock import SystemClock
+from app.persistence.integrations.system_random import SystemRandomSource
 from app.persistence.relational.card_repository import SqlCardRepository
 from app.persistence.relational.card_search_repository import SqlCardSearchRepository
 from app.persistence.relational.database import build_session_factory
 from app.persistence.relational.location_repository import SqlLocationRepository
 from app.persistence.relational.reference_repository import SqlReferenceRepository
 from app.persistence.relational.player_repository import SqlPlayerRepository
-from app.persistence.relational.initial_collection_repository import (
-    SqlInitialCollectionRepository,
-)
+from app.persistence.relational.collection_repository import SqlCollectionRepository
+from app.persistence.relational.cube_repository import SqlCubeRepository
+from app.persistence.relational.transactions import SqlTransactionManager
 
 
 @dataclass(frozen=True)
@@ -63,11 +65,15 @@ def build_container(settings: Settings) -> Container:
     clock = SystemClock()
     redis_client = Redis.from_url(settings.redis_url, decode_responses=True)
     players = SqlPlayerRepository(session_factory)
+    card_repository = SqlCardRepository(session_factory)
     collections = InitialCollectionService(
-        SqlInitialCollectionRepository(session_factory),
-        clock,
-        tuple(settings.initial_card_codes),
-        settings.initial_cubes,
+        transactions=SqlTransactionManager(session_factory),
+        deliveries=players,
+        cards=CardAvailability(card_repository),
+        collection=SqlCollectionRepository(),
+        cubes=SqlCubeRepository(),
+        clock=clock,
+        random=SystemRandomSource(),
         retry_seconds=settings.initial_collection_retry_seconds,
     )
     thumbnail_policy = ThumbnailPolicy(
@@ -79,7 +85,7 @@ def build_container(settings: Settings) -> Container:
         references=reference_service,
         image_processor=ImageProcessor(),
         image_store=image_store,
-        cards=SqlCardRepository(session_factory),
+        cards=card_repository,
         clock=clock,
         thumbnail_policy=thumbnail_policy,
     )

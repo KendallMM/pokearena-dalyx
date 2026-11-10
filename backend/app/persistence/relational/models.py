@@ -198,3 +198,27 @@ class PlayerCardRow(Base):
     player_id: Mapped[str] = mapped_column(ForeignKey("players.id"))
     card_id: Mapped[int] = mapped_column(ForeignKey("cards.id"))
     quantity: Mapped[int] = mapped_column(server_default=text("1"))
+
+
+class CubeMovementRow(Base):
+    """Historial de cubos: cada cambio del saldo deja aquí un movimiento.
+
+    El saldo de players.cubes siempre debe coincidir con la suma de amount.
+    """
+
+    __tablename__ = "cube_movements"
+    __table_args__ = (
+        # Una misma operación (motivo + referencia) no puede registrarse dos veces.
+        UniqueConstraint("reason", "reference", name="uq_cube_movements_operation"),
+        CheckConstraint("amount <> 0", name="ck_cube_movements_amount"),
+        CheckConstraint("balance_after >= 0", name="ck_cube_movements_balance"),
+        Index("ix_cube_movements_player", "player_id", "id"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    player_id: Mapped[str] = mapped_column(ForeignKey("players.id"))
+    amount: Mapped[int]
+    balance_after: Mapped[int]
+    reason: Mapped[str] = mapped_column(String(40))
+    reference: Mapped[str] = mapped_column(String(64))
+    created_at: Mapped[datetime] = mapped_column(DateTime(), server_default=func.now())
