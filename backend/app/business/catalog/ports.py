@@ -18,6 +18,7 @@ from app.business.catalog.references.models import (
     Rarity,
 )
 from app.business.image_processing.models import ImageInfo, ProcessedImage, StoredImage
+from app.business.shared.ports import Transaction
 
 
 class ReferenceRepository(Protocol):
@@ -64,6 +65,16 @@ class CardRepository(Protocol):
         self, card_id: int, error: str, retry_at: datetime
     ) -> None:
         """Deja la carta pendiente, guarda el error y la libera para reintentar."""
+        ...
+
+
+class AvailableCardRepository(Protocol):
+    """Lectura de cartas disponibles para otros módulos, dentro de su transacción."""
+
+    def available_ids_by_rarity(
+        self, transaction: Transaction, rarity_code: str
+    ) -> list[int]:
+        """Identificadores de las cartas Disponibles de esa rareza."""
         ...
 
 

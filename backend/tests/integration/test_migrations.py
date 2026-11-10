@@ -81,3 +81,37 @@ def test_search_name_is_added_and_backfilled_for_existing_cards(database_url) ->
         c["name"] for c in inspect(create_engine(database_url)).get_columns("cards")
     }
     assert "search_name" not in columns
+
+
+def test_cube_history_backfills_previous_initial_deliveries(database_url) -> None:
+    """Los cubos iniciales entregados antes del historial quedan registrados."""
+    from sqlalchemy import text
+
+    config = alembic_config(database_url)
+    command.upgrade(config, "0006")
+    engine = create_engine(database_url)
+    with engine.begin() as connection:
+        connection.execute(
+            text(
+                "INSERT INTO players (id, name, email, cubes) VALUES "
+                "('p1', 'A', 'a@x', 100), ('p2', 'B', 'b@x', 0)"
+            )
+        )
+        connection.execute(
+            text(
+                "INSERT INTO initial_collection_deliveries "
+                "(player_id, status, cubes_granted, delivered_at) VALUES "
+                "('p1', 'delivered', 100, '2026-11-01 12:00:00'), "
+                "('p2', 'pending', NULL, NULL)"
+            )
+        )
+    command.upgrade(config, "head")
+    with engine.begin() as connection:
+        rows = connection.execute(
+            text("SELECT player_id, amount, balance_after, reason FROM cube_movements")
+        ).all()
+    assert [tuple(row) for row in rows] == [("p1", 100, 100, "initial_collection")]
+    command.downgrade(config, "0006")
+    assert (
+        "cube_movements" not in inspect(create_engine(database_url)).get_table_names()
+    )

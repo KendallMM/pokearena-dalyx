@@ -2,7 +2,6 @@
 
 import os
 from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime, timezone
 from threading import Barrier
 from uuid import uuid4
 
@@ -12,19 +11,23 @@ from sqlalchemy import func, select, text
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.business.identity_access.models import ExternalIdentity, Player
-from app.business.collection.initial_collection import DeliveryResult, DeliveryStatus
-from app.persistence.relational.database import build_session_factory
-from app.persistence.relational.initial_collection_repository import (
-    SqlInitialCollectionRepository,
+from app.business.collection.initial_collection import (
+    STARTER_CARD_COUNT,
+    STARTER_CUBES,
+    DeliveryResult,
+    DeliveryStatus,
 )
+from app.persistence.relational.database import build_session_factory
 from app.persistence.relational.models import (
     CardRow,
+    CubeMovementRow,
     ExternalIdentityRow,
     InitialCollectionDeliveryRow,
     PlayerCardRow,
     PlayerRow,
 )
 from app.persistence.relational.player_repository import SqlPlayerRepository
+from tests.builders import real_initial_collection_service
 from tests.integration.conftest import alembic_config
 
 
@@ -57,30 +60,32 @@ def test_mysql_concurrent_account_creation_and_collection(
     assert accounts[0].elo == 0
     assert accounts[0].role.value == "player"
     player_id = accounts[0].id
-    code = f"T-{uuid4().hex[:8]}"
+    batch = uuid4().hex[:6]
     with mysql_sessions.begin() as session:
-        session.add(
-            CardRow(
-                code=code,
-                name="Carta de prueba",
-                search_name="carta de prueba",
-                cost=1,
-                power=1,
-                card_type_id=1,
-                rarity_id=1,
-                ability_id=1,
-                image_id=str(uuid4()),
-                status="available",
-            )
+        # rarity_id=1 es COMMON en el catálogo de referencia migrado.
+        session.add_all(
+            [
+                CardRow(
+                    code=f"T{batch}{index:02}",
+                    name="Carta de prueba",
+                    search_name="carta de prueba",
+                    cost=1,
+                    power=1,
+                    card_type_id=1,
+                    rarity_id=1,
+                    ability_id=1,
+                    image_id=str(uuid4()),
+                    status="available",
+                )
+                for index in range(STARTER_CARD_COUNT)
+            ]
         )
-    collections = SqlInitialCollectionRepository(mysql_sessions)
+    collections = real_initial_collection_service(mysql_sessions)
     grant_barrier = Barrier(2)
 
     def grant(_index: int) -> DeliveryResult:
         grant_barrier.wait(timeout=10)
-        return collections.deliver(
-            player_id, (code,), 100, datetime.now(timezone.utc), 60
-        )
+        return collections.deliver(player_id)
 
     with ThreadPoolExecutor(max_workers=2) as pool:
         results = list(pool.map(grant, range(2)))
@@ -111,9 +116,17 @@ def test_mysql_concurrent_account_creation_and_collection(
                     PlayerCardRow.player_id == player_id
                 )
             )
+            == STARTER_CARD_COUNT
+        )
+        assert session.get(PlayerRow, player_id).cubes == STARTER_CUBES
+        assert (
+            session.scalar(
+                select(func.count())
+                .select_from(CubeMovementRow)
+                .where(CubeMovementRow.player_id == player_id)
+            )
             == 1
         )
-        assert session.get(PlayerRow, player_id).cubes == 100
         assert (
             session.scalar(
                 text(

@@ -12,6 +12,7 @@ from app.business.catalog.content.cards.models import (
     PendingCard,
     StoredCard,
 )
+from app.business.shared.ports import Transaction
 from app.persistence.relational.database import naive_utc
 from app.persistence.relational.models import (
     AbilityRow,
@@ -19,6 +20,7 @@ from app.persistence.relational.models import (
     CardTypeRow,
     RarityRow,
 )
+from app.persistence.relational.transactions import session_of
 
 
 class SqlCardRepository:
@@ -26,6 +28,22 @@ class SqlCardRepository:
 
     def __init__(self, session_factory: sessionmaker[Session]) -> None:
         self._session_factory = session_factory
+
+    def available_ids_by_rarity(
+        self, transaction: Transaction, rarity_code: str
+    ) -> list[int]:
+        """Implementa AvailableCardRepository dentro de la transacción recibida."""
+        return list(
+            session_of(transaction).scalars(
+                select(CardRow.id)
+                .join(RarityRow, CardRow.rarity_id == RarityRow.id)
+                .where(
+                    RarityRow.code == rarity_code,
+                    CardRow.status == CardStatus.AVAILABLE.value,
+                )
+                .order_by(CardRow.id)
+            )
+        )
 
     def add(self, card: NewCard) -> StoredCard:
         # Todo ocurre en una transacción: si algo falla, el consecutivo no se consume.
