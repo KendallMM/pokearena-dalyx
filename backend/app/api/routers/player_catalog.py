@@ -12,14 +12,14 @@ from app.api.gateway.errors import (
     NOT_FOUND_RESPONSE,
     ErrorResponse,
 )
-from app.api.schemas.player_catalog import PlayerCardOut, PlayerCatalogResponse
-from app.api.schemas.references import (
-    AbilityOut,
-    CardTypeOut,
-    RarityOut,
-    ReferencesResponse,
+from app.api.schemas.player_catalog import (
+    CardTypesResponse,
+    PlayerCardOut,
+    PlayerCatalogResponse,
 )
+from app.api.schemas.references import AbilityOut, CardTypeOut, RarityOut
 from app.business.catalog.references.reference_service import ReferenceService
+from app.business.catalog.search.card_search_service import CardSearchService
 from app.business.catalog.search.models import CatalogBrowseRequest
 from app.business.collection.catalog_browser import CatalogBrowser, CatalogEntry
 from app.business.identity_access.roles import Actor
@@ -36,6 +36,10 @@ def get_catalog_browser(request: Request) -> CatalogBrowser:
 
 def get_reference_service(request: Request) -> ReferenceService:
     return request.app.state.reference_service
+
+
+def get_card_search_service(request: Request) -> CardSearchService:
+    return request.app.state.card_search_service
 
 
 def _to_card(entry: CatalogEntry) -> PlayerCardOut:
@@ -56,10 +60,10 @@ def _to_card(entry: CatalogEntry) -> PlayerCardOut:
 
 @router.get(
     "/referencias",
-    response_model=ReferencesResponse,
-    summary="Cargar los tipos, rarezas y habilidades",
+    response_model=CardTypesResponse,
+    summary="Cargar los tipos de carta",
     description=(
-        "Valores que el jugador puede usar como filtros del catálogo. Incluye ETag: "
+        "Tipos que el jugador puede usar como filtro del catálogo. Incluye ETag: "
         "con If-None-Match la API responde 304 si no hay cambios."
     ),
     responses={
@@ -72,8 +76,8 @@ def get_player_references(
     service: ReferenceService = Depends(get_reference_service),
     if_none_match: str | None = Header(default=None),
 ) -> Response:
-    payload = ReferencesResponse.model_validate(
-        asdict(service.get_references())
+    payload = CardTypesResponse(
+        card_types=[CardTypeOut(**asdict(t)) for t in service.get_card_types()]
     ).model_dump()
     etag = compute_etag(payload)
     headers = {"ETag": etag, "Cache-Control": CACHE_CONTROL}
@@ -149,9 +153,10 @@ def browse_catalog(
 def get_card_image(
     code: str,
     _actor: Actor = Depends(require_player),
-    browser: CatalogBrowser = Depends(get_catalog_browser),
+    search: CardSearchService = Depends(get_card_search_service),
 ) -> Response:
-    image = browser.card_image(code)
+    # Pasos 57–68: la imagen la da Búsqueda directamente, solo de cartas Disponibles.
+    image = search.get_card_image(code, only_available=True)
     return Response(
         content=image.data,
         media_type=image.content_type,

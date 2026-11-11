@@ -4,6 +4,7 @@ from app.business.catalog.ports import ReferenceRepository
 from typing import Any
 
 from app.business.catalog.references.models import (
+    CardType,
     EffectParameter,
     LocationEffectType,
     References,
@@ -25,6 +26,20 @@ class ReferenceService:
             abilities=self._repository.list_abilities(),
             location_effect_types=self._repository.list_location_effect_types(),
         )
+
+    def get_card_types(self) -> list[CardType]:
+        """Solo los tipos de carta, para el filtro del catálogo del jugador."""
+        return self._repository.list_card_types()
+
+    def validate_card_type(self, card_type: str | None) -> None:
+        """Un tipo opcional debe existir; el error indica los tipos permitidos."""
+        if card_type:
+            _check_exists(
+                card_type,
+                [t.code for t in self.get_card_types()],
+                "El tipo de carta no existe.",
+                "card_type",
+            )
 
     def validate_selection(
         self, card_type: str, rarity: str, ability: str | None

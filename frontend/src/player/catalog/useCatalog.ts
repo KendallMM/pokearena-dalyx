@@ -2,28 +2,28 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import { useApi } from "../../api/ApiContext";
 import type {
+  CardType,
   PlayerCatalogCard,
   PlayerCatalogCriteria,
-  References,
 } from "../../api/types";
 
-export type CatalogReferencesState =
+export type CardTypesState =
   | { status: "loading" }
-  | { status: "ready"; references: References }
+  | { status: "ready"; cardTypes: CardType[] }
   | { status: "error"; error: unknown };
 
 /* Tipos de carta para el filtro. */
-export function useCatalogReferences() {
+export function useCardTypes() {
   const { playerCatalog } = useApi();
-  const [state, setState] = useState<CatalogReferencesState>({ status: "loading" });
+  const [state, setState] = useState<CardTypesState>({ status: "loading" });
   const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
     setState({ status: "loading" });
-    playerCatalog.references().then(
-      (references) => {
-        if (!cancelled) setState({ status: "ready", references });
+    playerCatalog.cardTypes().then(
+      (cardTypes) => {
+        if (!cancelled) setState({ status: "ready", cardTypes });
       },
       (error: unknown) => {
         if (!cancelled) setState({ status: "error", error });

@@ -126,7 +126,7 @@ describe("CatalogPage", () => {
 
   it("explains that the catalog is for player accounts", async () => {
     const services = fakeServices();
-    services.playerCatalog.references.mockRejectedValue(
+    services.playerCatalog.cardTypes.mockRejectedValue(
       new ApiError(403, "permission_denied", "x"),
     );
     setup(services);

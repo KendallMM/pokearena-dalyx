@@ -57,6 +57,15 @@ class CatalogBrowseRequest:
 
 
 @dataclass(frozen=True)
+class CatalogQuery:
+    """Filtros y paginación del catálogo del jugador, ya validados."""
+
+    criteria: CardCriteria
+    limit: int
+    last_id: int
+
+
+@dataclass(frozen=True)
 class CardSummary:
     """Una carta del resultado, con lo que el administrador necesita para revisarla."""
 

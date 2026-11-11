@@ -1,6 +1,6 @@
 """Repositorio de colección: cartas que posee cada jugador."""
 
-from sqlalchemy import select
+from sqlalchemy import ColumnElement, select
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session, sessionmaker
 
@@ -17,12 +17,21 @@ class SqlCollectionRepository:
         self._session_factory = session_factory
 
     def owned_copies(self, player_id: str) -> dict[int, int]:
-        """Copias que posee el jugador, por identificador de carta."""
+        """Toda la colección del jugador: copias por identificador de carta."""
+        return self._copies(PlayerCardRow.player_id == player_id)
+
+    def copies_of(self, player_id: str, card_ids: list[int]) -> dict[int, int]:
+        """Copias de esas cartas que posee el jugador; las que no tiene no aparecen."""
+        return self._copies(
+            PlayerCardRow.player_id == player_id, PlayerCardRow.card_id.in_(card_ids)
+        )
+
+    def _copies(self, *conditions: ColumnElement[bool]) -> dict[int, int]:
         try:
             with self._session_factory() as session:
                 rows = session.execute(
                     select(PlayerCardRow.card_id, PlayerCardRow.quantity).where(
-                        PlayerCardRow.player_id == player_id
+                        *conditions
                     )
                 )
                 return {card_id: quantity for card_id, quantity in rows}

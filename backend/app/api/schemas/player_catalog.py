@@ -30,3 +30,9 @@ class PlayerCatalogResponse(BaseModel):
     next_cursor: int | None = Field(
         description="Valor de last_id para pedir la página siguiente. Nulo en la última."
     )
+
+
+class CardTypesResponse(BaseModel):
+    """Tipos de carta para el filtro del catálogo."""
+
+    card_types: list[CardTypeOut]

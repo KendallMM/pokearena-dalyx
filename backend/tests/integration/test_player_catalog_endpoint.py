@@ -289,5 +289,7 @@ def test_image_is_the_large_version(catalog: Catalog, player_token: str) -> None
 def test_player_can_load_the_filter_values(catalog: Catalog, player_token: str) -> None:
     response = catalog.get(player_token, "/v1/referencias")
     assert response.status_code == 200
-    assert [t["code"] for t in response.json()["card_types"]][:2] == ["FUE", "AGU"]
+    body = response.json()
+    assert list(body) == ["card_types"]
+    assert [t["code"] for t in body["card_types"]][:2] == ["FUE", "AGU"]
     assert response.headers["etag"]

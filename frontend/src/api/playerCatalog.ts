@@ -1,5 +1,5 @@
 import type { HttpClient } from "./httpClient";
-import type { PlayerCatalogCriteria, PlayerCatalogPage, References } from "./types";
+import type { CardType, PlayerCatalogCriteria, PlayerCatalogPage } from "./types";
 
 /* Nombres de los filtros en la API. Los que no están definidos no se envían. */
 function toQuery(criteria: PlayerCatalogCriteria, cursor: number | null): string {
@@ -20,8 +20,8 @@ function toQuery(criteria: PlayerCatalogCriteria, cursor: number | null): string
 
 /* Catálogo y colección del jugador. */
 export interface PlayerCatalogApi {
-  /* Tipos, rarezas y habilidades para los filtros. */
-  references(): Promise<References>;
+  /* Tipos de carta para el filtro. */
+  cardTypes(): Promise<CardType[]>;
   /* Una página del catálogo. El cursor es el next_cursor de la página anterior. */
   search(
     criteria: PlayerCatalogCriteria,
@@ -33,7 +33,8 @@ export interface PlayerCatalogApi {
 
 export function createPlayerCatalogApi(http: HttpClient): PlayerCatalogApi {
   return {
-    references: () => http.getCached<References>("/v1/referencias"),
+    cardTypes: async () =>
+      (await http.getCached<{ card_types: CardType[] }>("/v1/referencias")).card_types,
     search: (criteria, cursor) =>
       http.getJson<PlayerCatalogPage>(`/v1/cartas${toQuery(criteria, cursor)}`),
     image: (imageUrl) => http.getBlob(imageUrl),

@@ -39,7 +39,7 @@ export function fakeServices(): ApiServices & {
   cards: { create: ReturnType<typeof vi.fn> };
   locations: { create: ReturnType<typeof vi.fn> };
   playerCatalog: {
-    references: ReturnType<typeof vi.fn>;
+    cardTypes: ReturnType<typeof vi.fn>;
     search: ReturnType<typeof vi.fn>;
     image: ReturnType<typeof vi.fn>;
   };
@@ -53,7 +53,7 @@ export function fakeServices(): ApiServices & {
     },
     locations: { create: vi.fn().mockResolvedValue(LOCATION_CREATED) },
     playerCatalog: {
-      references: vi.fn().mockResolvedValue(REFERENCES),
+      cardTypes: vi.fn().mockResolvedValue(REFERENCES.card_types),
       search: vi.fn().mockResolvedValue({ items: [], next_cursor: null }),
       image: vi.fn().mockResolvedValue(new Blob()),
     },

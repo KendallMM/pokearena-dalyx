@@ -13,7 +13,7 @@ import {
   type CatalogFilterField,
   type CatalogFilterValues,
 } from "./catalogRules";
-import { useCatalog, useCatalogReferences } from "./useCatalog";
+import { useCardTypes, useCatalog } from "./useCatalog";
 
 export const RETRY_MESSAGE = "No se pudo cargar el catálogo. Inténtalo de nuevo.";
 export const SESSION_EXPIRED_MESSAGE =
@@ -39,14 +39,14 @@ function describeError(error: unknown): {
 
 /* Pantalla Catálogo: explorar todas las cartas y ver cuáles posee el jugador. */
 export function CatalogPage() {
-  const { state: referencesState, reload } = useCatalogReferences();
+  const { state: typesState, reload } = useCardTypes();
   const { state, search, loadMore } = useCatalog();
   const [values, setValues] = useState<CatalogFilterValues>(EMPTY_CATALOG_FILTERS);
   const [errors, setErrors] = useState<CatalogFilterErrors>({});
 
   useEffect(() => {
-    if (referencesState.status === "ready") void search({});
-  }, [referencesState.status, search]);
+    if (typesState.status === "ready") void search({});
+  }, [typesState.status, search]);
 
   const problem = state.status === "error" ? describeError(state.error) : null;
 
@@ -92,14 +92,14 @@ export function CatalogPage() {
   const searching = state.status === "searching";
   const { items, nextCursor } = state;
 
-  if (referencesState.status === "loading") {
+  if (typesState.status === "loading") {
     return <Spinner label="Cargando el catálogo…" />;
   }
-  if (referencesState.status === "error") {
+  if (typesState.status === "error") {
     return (
       <section className="page">
         <Alert variant="error" title="No se pudo abrir el catálogo">
-          <p>{describeError(referencesState.error).message}</p>
+          <p>{describeError(typesState.error).message}</p>
         </Alert>
         <Button variant="secondary" onClick={reload}>
           Reintentar
@@ -122,7 +122,7 @@ export function CatalogPage() {
             label="Tipo"
             placeholder="Todos"
             value={values.cardType}
-            options={referencesState.references.card_types.map((t) => ({
+            options={typesState.cardTypes.map((t) => ({
               value: t.code,
               label: t.name,
             }))}

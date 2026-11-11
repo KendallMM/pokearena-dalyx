@@ -11,14 +11,17 @@ from typing import Protocol
 
 from app.business.catalog.search.card_search_service import CardSearchService
 from app.business.catalog.search.models import CardSummary, CatalogBrowseRequest
-from app.business.image_processing.models import StoredImage
 
 
 class OwnedCardsRepository(Protocol):
     """Repositorio de colección: copias que posee cada jugador."""
 
     def owned_copies(self, player_id: str) -> dict[int, int]:
-        """Copias por identificador de carta. Sin cartas, un diccionario vacío."""
+        """Toda la colección: copias por identificador de carta."""
+        ...
+
+    def copies_of(self, player_id: str, card_ids: list[int]) -> dict[int, int]:
+        """Copias de esas cartas que posee el jugador; las que no tiene no aparecen."""
         ...
 
 
@@ -52,15 +55,16 @@ class CatalogBrowser:
     ) -> CatalogPage:
         """Una página del catálogo. Los filtros activos se cumplen a la vez; sin
         resultados devuelve una lista vacía."""
-        copies = self._owned.owned_copies(player_id)
-        page = self._catalog.browse_catalog(
-            request, card_ids=copies.keys() if only_owned else None
-        )
+        # Pasos 27–34: primero se validan los filtros; un error no lee la colección.
+        query = self._catalog.prepare_catalog_query(request)
+        # Pasos 35–38: solo para "solo mis cartas" se leen las cartas del jugador.
+        owned_ids = self._owned.owned_copies(player_id).keys() if only_owned else None
+        # Pasos 39–44: Búsqueda devuelve la página y el siguiente cursor.
+        page = self._catalog.browse_catalog(query, card_ids=owned_ids)
+        # Pasos 45–48: copias de las cartas de esta página.
+        ids = [card.id for card in page.items]
+        copies = self._owned.copies_of(player_id, ids) if ids else {}
         return CatalogPage(
             items=[CatalogEntry(card, copies.get(card.id, 0)) for card in page.items],
             next_cursor=page.next_cursor,
         )
-
-    def card_image(self, code: str) -> StoredImage:
-        """Versión grande de la imagen de una carta Disponible."""
-        return self._catalog.get_card_image(code, only_available=True)
