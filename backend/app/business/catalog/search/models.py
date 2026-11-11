@@ -38,6 +38,31 @@ class CardCriteria:
     card_type: str | None = None
     rarity: str | None = None
     ability: str | None = None
+    # Restringe a estas cartas (por ejemplo, las que posee un jugador).
+    card_ids: frozenset[int] | None = None
+    # Solo cartas Disponibles: lo que ven los jugadores.
+    only_available: bool = False
+
+
+@dataclass(frozen=True)
+class CatalogBrowseRequest:
+    """Filtros del catálogo que ve el jugador, tal como llegan. Todos opcionales."""
+
+    card_type: str | None = None
+    cost: int | None = None  # valor exacto
+    cost_min: int | None = None
+    cost_max: int | None = None
+    limit: int | None = None
+    last_id: int | None = None
+
+
+@dataclass(frozen=True)
+class CatalogQuery:
+    """Filtros y paginación del catálogo del jugador, ya validados."""
+
+    criteria: CardCriteria
+    limit: int
+    last_id: int
 
 
 @dataclass(frozen=True)

@@ -88,8 +88,11 @@ class CardSearchRepository(Protocol):
         ordenadas por id y con un máximo de limit."""
         ...
 
-    def find_image_id(self, code: str) -> str | None:
-        """Identificador de la imagen de la carta, o None si la carta no existe."""
+    def find_image_id(self, code: str, only_available: bool = False) -> str | None:
+        """Identificador de la imagen de la carta, o None si la carta no existe.
+
+        Con only_available, una carta que aún no está Disponible cuenta como inexistente.
+        """
         ...
 
 
