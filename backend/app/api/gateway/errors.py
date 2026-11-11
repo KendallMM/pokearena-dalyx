@@ -103,9 +103,18 @@ def _validation_error_handler(request: Request, exc: Exception) -> JSONResponse:
     assert isinstance(exc, RequestValidationError)
     first = exc.errors()[0]
     field = str(first["loc"][-1]) if first["loc"] else None
-    return _error_response(
-        request, 400, "validation_failed", f"Valor inválido: {first['msg']}", field
-    )
+    reason = VALIDATION_REASONS.get(first.get("type", ""), first["msg"])
+    message = f"Valor inválido en {field}: {reason}" if field else reason
+    return _error_response(request, 400, "validation_failed", message, field)
+
+
+# Motivos en español de los errores de formato más comunes; el resto usa el de pydantic.
+VALIDATION_REASONS = {
+    "int_parsing": "debe ser un número entero.",
+    "int_from_float": "debe ser un número entero.",
+    "bool_parsing": "debe ser true o false.",
+    "missing": "es obligatorio.",
+}
 
 
 def _internal_error(request: Request) -> JSONResponse:

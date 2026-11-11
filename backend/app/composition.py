@@ -7,6 +7,7 @@ from redis import Redis
 
 from app.api.gateway.authentication import TokenIssuer, TokenValidator
 from app.api.gateway.google_verifier import GoogleTokenVerifier
+from app.business.collection.catalog_browser import CatalogBrowser
 from app.business.collection.initial_collection import InitialCollectionService
 from app.business.identity_access.session_service import SessionService
 from app.business.identity_access.ports import LoginChallengeStore, PlayerRepository
@@ -51,6 +52,7 @@ class Container:
     scheduler: Scheduler | None = None
     session_service: SessionService | None = None
     initial_collection_service: InitialCollectionService | None = None
+    catalog_browser: CatalogBrowser | None = None
     players: PlayerRepository | None = None
     login_challenges: LoginChallengeStore | None = None
     token_issuer: TokenIssuer | None = None
@@ -66,11 +68,12 @@ def build_container(settings: Settings) -> Container:
     redis_client = Redis.from_url(settings.redis_url, decode_responses=True)
     players = SqlPlayerRepository(session_factory)
     card_repository = SqlCardRepository(session_factory)
+    collection_repository = SqlCollectionRepository(session_factory)
     collections = InitialCollectionService(
         transactions=SqlTransactionManager(session_factory),
         deliveries=players,
         cards=CardAvailability(card_repository),
-        collection=SqlCollectionRepository(),
+        collection=collection_repository,
         cubes=SqlCubeRepository(),
         clock=clock,
         random=SystemRandomSource(),
@@ -135,6 +138,7 @@ def build_container(settings: Settings) -> Container:
             players,
         ),
         initial_collection_service=collections,
+        catalog_browser=CatalogBrowser(card_search_service, collection_repository),
         players=players,
         login_challenges=RedisLoginChallengeStore(redis_client),
         token_issuer=TokenIssuer(
