@@ -29,7 +29,7 @@ def real_initial_collection_service(
         transactions=SqlTransactionManager(session_factory),
         deliveries=SqlPlayerRepository(session_factory),
         cards=CardAvailability(SqlCardRepository(session_factory)),
-        collection=SqlCollectionRepository(),
+        collection=SqlCollectionRepository(session_factory),
         cubes=SqlCubeRepository(),
         clock=clock or SystemClock(),
         random=random or SystemRandomSource(),

@@ -1,5 +1,5 @@
 import { useAccount } from "../session/AccountContext";
-import { Alert, Button } from "../ui";
+import { Alert } from "../ui";
 import { MatchPage } from "./MatchPage";
 
 /**
@@ -7,15 +7,9 @@ import { MatchPage } from "./MatchPage";
  * Un estado pendiente/no disponible se muestra sin invalidar la autenticación.
  */
 export function PlayerGamePage() {
-  const { account, initialCollection, logOut } = useAccount();
+  const { initialCollection } = useAccount();
   return (
     <>
-      <header className="site-bar">
-        <p>Hola, {account?.name}</p>
-        <Button variant="secondary" onClick={logOut}>
-          Cerrar sesión
-        </Button>
-      </header>
       {initialCollection && (
         <Alert variant="info" title="Colección inicial">
           <p>{initialCollection.message}</p>

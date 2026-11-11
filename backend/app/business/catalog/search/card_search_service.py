@@ -1,9 +1,17 @@
 """Búsqueda: caso de uso de buscar cartas con paginación por cursor."""
 
+from collections.abc import Iterable
+from dataclasses import replace
+
 from app.business.catalog.ports import CardSearchRepository, ImageStore
 from app.business.catalog.references.reference_service import ReferenceService
 from app.business.catalog.search.card_search_rules import build_criteria, page_settings
-from app.business.catalog.search.models import CardPage, CardSearchRequest
+from app.business.catalog.search.models import (
+    CardCriteria,
+    CardPage,
+    CardSearchRequest,
+    CatalogBrowseRequest,
+)
 from app.business.image_processing.models import StoredImage
 from app.business.shared.errors import NotFoundError
 
@@ -24,7 +32,29 @@ class CardSearchService:
     def search_cards(self, request: CardSearchRequest) -> CardPage:
         """Todos los criterios activos se cumplen a la vez. Sin criterios recorre el
         catálogo completo. Una página sin resultados es una lista vacía, no un error."""
-        criteria = build_criteria(request)
+        return self._page(build_criteria(request), request)
+
+    def browse_catalog(
+        self, request: CatalogBrowseRequest, card_ids: Iterable[int] | None = None
+    ) -> CardPage:
+        """Catálogo para jugadores: solo cartas Disponibles, filtradas por tipo y
+        costo. Con card_ids, solo esas cartas (por ejemplo, las que posee)."""
+        search = CardSearchRequest(
+            card_type=request.card_type,
+            cost=request.cost,
+            cost_min=request.cost_min,
+            cost_max=request.cost_max,
+            limit=request.limit,
+            last_id=request.last_id,
+        )
+        criteria = replace(
+            build_criteria(search),
+            only_available=True,
+            card_ids=None if card_ids is None else frozenset(card_ids),
+        )
+        return self._page(criteria, search)
+
+    def _page(self, criteria: CardCriteria, request: CardSearchRequest) -> CardPage:
         limit, last_id = page_settings(request)
         self._references.validate_optional_selection(
             criteria.card_type, criteria.rarity, criteria.ability
@@ -35,9 +65,12 @@ class CardSearchService:
         has_more = len(found) > limit
         return CardPage(items=items, next_cursor=items[-1].id if has_more else None)
 
-    def get_card_image(self, code: str) -> StoredImage:
-        """Devuelve la versión grande de la imagen de una carta."""
-        image_id = self._cards.find_image_id(code.strip().upper())
+    def get_card_image(self, code: str, only_available: bool = False) -> StoredImage:
+        """Devuelve la versión grande de la imagen de una carta.
+
+        Con only_available, las cartas que aún no están Disponibles no existen.
+        """
+        image_id = self._cards.find_image_id(code.strip().upper(), only_available)
         if image_id is None:
             raise NotFoundError("La carta no existe.", field="code")
         try:

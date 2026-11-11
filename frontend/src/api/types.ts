@@ -156,3 +156,33 @@ export interface PlayerSession {
   player: PlayerAccount;
   initial_collection: InitialCollectionDelivery;
 }
+
+/* Filtros de GET /v1/cartas. Todos opcionales; los activos se cumplen a la vez. */
+export interface PlayerCatalogCriteria {
+  cardType?: string;
+  costMin?: number;
+  costMax?: number;
+  /* Solo las cartas que posee el jugador. */
+  ownedOnly?: boolean;
+}
+
+/* Una carta del catálogo y cuántas copias tiene el jugador. */
+export interface PlayerCatalogCard {
+  code: string;
+  name: string;
+  cost: number;
+  power: number;
+  card_type: CardType;
+  rarity: Rarity;
+  ability: Ability;
+  /* Ruta de la versión grande de la imagen. Pide sesión. */
+  image_url: string;
+  owned: boolean;
+  copies: number;
+}
+
+/* Una página del catálogo. next_cursor es nulo en la última. */
+export interface PlayerCatalogPage {
+  items: PlayerCatalogCard[];
+  next_cursor: number | null;
+}

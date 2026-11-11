@@ -49,14 +49,25 @@ class ReferenceService:
     ) -> None:
         """Como validate_selection, pero cada valor es opcional (para filtrar)."""
         references = self.get_references()
-        if card_type and card_type not in {t.code for t in references.card_types}:
-            raise ValidationFailedError(
-                "El tipo de carta no existe.", field="card_type"
-            )
-        if rarity and rarity not in {r.code for r in references.rarities}:
-            raise ValidationFailedError("La rareza no existe.", field="rarity")
-        if ability and ability not in {a.code for a in references.abilities}:
-            raise ValidationFailedError("La habilidad no existe.", field="ability")
+        # El mensaje indica los valores permitidos para corregir el filtro.
+        _check_exists(
+            card_type,
+            [t.code for t in references.card_types],
+            "El tipo de carta no existe.",
+            "card_type",
+        )
+        _check_exists(
+            rarity,
+            [r.code for r in references.rarities],
+            "La rareza no existe.",
+            "rarity",
+        )
+        _check_exists(
+            ability,
+            [a.code for a in references.abilities],
+            "La habilidad no existe.",
+            "ability",
+        )
 
     def validate_location_effect(
         self, effect_type: str | None, parameters: dict[str, Any] | None
@@ -152,3 +163,13 @@ def _check_integer(parameter: EffectParameter, value: Any, field_name: str) -> i
             field=field_name,
         )
     return value
+
+
+def _check_exists(
+    value: str | None, allowed: list[str], message: str, field: str
+) -> None:
+    """Un valor elegido debe existir; el error indica los permitidos."""
+    if value and value not in allowed:
+        raise ValidationFailedError(
+            f"{message} Valores permitidos: {', '.join(allowed)}.", field=field
+        )

@@ -60,6 +60,12 @@ class SqlCardSearchRepository:
             statement = statement.where(RarityRow.code == criteria.rarity)
         if criteria.ability:
             statement = statement.where(AbilityRow.code == criteria.ability)
+        if criteria.only_available:
+            statement = statement.where(CardRow.status == CardStatus.AVAILABLE.value)
+        if criteria.card_ids is not None:
+            if not criteria.card_ids:
+                return []
+            statement = statement.where(CardRow.id.in_(criteria.card_ids))
 
         with self._session_factory() as session:
             return [
@@ -84,8 +90,9 @@ class SqlCardSearchRepository:
                 )
             ]
 
-    def find_image_id(self, code: str) -> str | None:
+    def find_image_id(self, code: str, only_available: bool = False) -> str | None:
+        statement = select(CardRow.image_id).where(CardRow.code == code)
+        if only_available:
+            statement = statement.where(CardRow.status == CardStatus.AVAILABLE.value)
         with self._session_factory() as session:
-            return session.scalars(
-                select(CardRow.image_id).where(CardRow.code == code)
-            ).first()
+            return session.scalars(statement).first()

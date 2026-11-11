@@ -1522,3 +1522,102 @@ h1 {
     transition: none;
   }
 }
+
+/* App del jugador: navegación de la barra superior. */
+.player-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.player-bar nav {
+  flex: 1;
+}
+
+.player-nav a {
+  display: block;
+  min-height: 44px;
+  padding: 8px 12px;
+  font-family: var(--font-display);
+  font-size: 1.1rem;
+  letter-spacing: 0.05em;
+  color: #fff;
+  text-decoration: none;
+}
+
+.player-nav a.active {
+  background: var(--color-accent);
+  color: var(--color-black);
+}
+
+/*
+ * Filtros del catálogo: etiqueta, ayuda, caja y error de cada filtro comparten las
+ * mismas filas, así las cajas quedan alineadas aunque un filtro no tenga ayuda.
+ */
+.catalog-filters {
+  grid-template-rows: repeat(4, auto);
+}
+
+.catalog-filters > .field {
+  display: grid;
+  grid-row: span 4;
+  grid-template-rows: subgrid;
+}
+
+.catalog-filters > .field > .field__label {
+  grid-row: 1;
+}
+
+.catalog-filters > .field > .field__hint {
+  grid-row: 2;
+}
+
+.catalog-filters > .field > .input {
+  grid-row: 3;
+}
+
+.catalog-filters > .field > .field__error {
+  grid-row: 4;
+}
+
+/* Catálogo: marca de cuántas copias tiene el jugador. */
+.catalog-owned-toggle {
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+  min-height: 44px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.catalog-owned-toggle input {
+  width: 1.25rem;
+  height: 1.25rem;
+}
+
+.catalog-card__copies {
+  margin: 0;
+  padding: 4px 10px;
+  font-weight: 800;
+  text-align: center;
+  color: var(--color-muted);
+  background: var(--color-surface);
+  border: 2px solid var(--color-border);
+  border-radius: 999px;
+  justify-self: center;
+}
+
+.catalog-card__copies--owned {
+  color: var(--color-success);
+  background: var(--color-success-bg);
+  border-color: var(--color-success);
+}
+
+/* Las cartas que no se tienen se ven apagadas, pero se pueden explorar igual. */
+.catalog-card--missing .game-card {
+  filter: grayscale(0.7);
+  opacity: 0.75;
+}
