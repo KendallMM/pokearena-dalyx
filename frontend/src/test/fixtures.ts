@@ -67,6 +67,12 @@ export function fakeServices(): ApiServices & {
       get: vi.fn(),
       create: vi.fn().mockResolvedValue({ id: "deck-1", name: "Deck", card_codes: [] }),
     },
+    searches: {
+      current: vi.fn().mockResolvedValue(null),
+      get: vi.fn(),
+      enter: vi.fn(),
+      cancel: vi.fn(),
+    },
     sessions: { challenge: vi.fn(), signInGoogle: vi.fn(), me: vi.fn() },
   };
 }

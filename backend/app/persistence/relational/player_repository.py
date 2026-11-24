@@ -94,6 +94,20 @@ class SqlPlayerRepository:
                 "No se pudo crear la cuenta. Reintenta."
             ) from exc
 
+    def lock_players(self, tx: Transaction, player_ids: list[str]) -> None:
+        session = session_of(tx)
+        for player_id in sorted(player_ids):
+            session.execute(
+                select(PlayerRow.id).where(PlayerRow.id == player_id).with_for_update()
+            ).scalar_one()
+
+    def elo(self, tx: Transaction, player_id: str) -> int:
+        return (
+            session_of(tx)
+            .execute(select(PlayerRow.elo).where(PlayerRow.id == player_id))
+            .scalar_one()
+        )
+
     def get(self, player_id: str) -> Player:
         """Lee la cuenta interna, incluidos los cubos ya entregados."""
         try:

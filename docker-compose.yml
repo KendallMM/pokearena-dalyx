@@ -18,6 +18,9 @@ services:
       GOOGLE_TIMEOUT_SECONDS: ${GOOGLE_TIMEOUT_SECONDS:-5}
       LOGIN_CHALLENGE_SECONDS: ${LOGIN_CHALLENGE_SECONDS:-300}
       INITIAL_COLLECTION_RETRY_SECONDS: ${INITIAL_COLLECTION_RETRY_SECONDS:-60}
+      MATCHMAKING_INTERVAL_SECONDS: ${MATCHMAKING_INTERVAL_SECONDS:-2}
+      SEARCH_REQUEST_LIMIT: ${SEARCH_REQUEST_LIMIT:-30}
+      SEARCH_REQUEST_WINDOW_SECONDS: ${SEARCH_REQUEST_WINDOW_SECONDS:-60}
     depends_on:
       mysql:
         condition: service_healthy
@@ -67,6 +70,16 @@ services:
 
   redis:
     image: redis:7-alpine
+    command:
+      - redis-server
+      - --maxmemory
+      - "${REDIS_MAXMEMORY:-64mb}"
+      - --maxmemory-policy
+      - volatile-lru
+      - --save
+      - ""
+      - --appendonly
+      - "no"
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s

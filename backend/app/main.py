@@ -7,7 +7,7 @@ from fastapi import FastAPI
 
 from app.api.gateway.install import install_gateway
 from app.api.routers.admin import card_search, cards, locations, references
-from app.api.routers import player, player_catalog, player_decks
+from app.api.routers import player, player_catalog, player_decks, player_searches
 from app.composition import Container, build_container
 from app.config.settings import get_settings
 from app.observability.logging import configure_logging
@@ -21,13 +21,18 @@ def create_app(container: Container | None = None) -> FastAPI:
     @asynccontextmanager
     async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
         # El planificador corre en su propio hilo, aparte de las solicitudes.
-        if container.scheduler is not None:
-            container.scheduler.start()
+        schedulers = [
+            scheduler
+            for scheduler in (container.scheduler, container.matchmaking_scheduler)
+            if scheduler is not None
+        ]
+        for scheduler in schedulers:
+            scheduler.start()
         try:
             yield
         finally:
-            if container.scheduler is not None:
-                container.scheduler.stop()
+            for scheduler in reversed(schedulers):
+                scheduler.stop()
 
     app = FastAPI(title="PokeArena API", version="0.1.0", lifespan=lifespan)
     app.state.settings = container.settings
@@ -44,6 +49,8 @@ def create_app(container: Container | None = None) -> FastAPI:
     app.state.players = container.players
     app.state.login_challenges = container.login_challenges
     app.state.token_issuer = container.token_issuer
+    app.state.elo_queue = container.elo_queue
+    app.state.search_limiter = container.search_limiter
     install_gateway(app)
     app.include_router(references.router)
     app.include_router(cards.router)
@@ -52,6 +59,7 @@ def create_app(container: Container | None = None) -> FastAPI:
     app.include_router(player.router)
     app.include_router(player_catalog.router)
     app.include_router(player_decks.router)
+    app.include_router(player_searches.router)
 
     @app.get("/health", tags=["Operación"], summary="Estado del servicio")
     def health() -> dict[str, str]:

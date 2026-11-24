@@ -1,4 +1,4 @@
-import { NavLink, Outlet, useMatch } from "react-router-dom";
+import { Navigate, NavLink, Outlet } from "react-router-dom";
 
 import { useAccount } from "../session/AccountContext";
 import { Button, ThemeToggle } from "../ui";
@@ -7,9 +7,10 @@ import { Button, ThemeToggle } from "../ui";
 export function PlayerLayout() {
   const { account, logOut } = useAccount();
   const isPlayer = account?.role === "player";
-  // El tablero de la partida trae su propio <main> y usa todo el ancho; las demás
-  // pantallas van en el mismo contenedor centrado que la App del Administrador.
-  const isMatch = useMatch("/partida") !== null;
+
+  if (account?.role === "content_admin") {
+    return <Navigate to="/menu" replace />;
+  }
 
   return (
     <div className="layout">
@@ -33,24 +34,15 @@ export function PlayerLayout() {
                 </li>
               </>
             )}
-            {account?.role === "content_admin" && (
-              <li>
-                <NavLink to="/menu">Administración</NavLink>
-              </li>
-            )}
           </ul>
         </nav>
         <Button variant="secondary" onClick={logOut}>
           Cerrar sesión
         </Button>
       </header>
-      {isMatch ? (
+      <main id="main" className="layout__main">
         <Outlet />
-      ) : (
-        <main id="main" className="layout__main">
-          <Outlet />
-        </main>
-      )}
+      </main>
       <ThemeToggle />
     </div>
   );

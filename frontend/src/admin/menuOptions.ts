@@ -15,9 +15,4 @@ export const MENU_OPTIONS = [
     label: "Crear ubicación",
     description: "Agrega una ubicación para las partidas.",
   },
-  {
-    to: "/partida",
-    label: "Área de juego",
-    description: "Mira el diseño de la partida, con datos de ejemplo.",
-  },
 ] as const;

@@ -12,7 +12,13 @@ from app.business.collection.decks import DeckService
 from app.business.collection.initial_collection import InitialCollectionService
 from app.business.identity_access.session_service import SessionService
 from app.business.identity_access.ports import LoginChallengeStore, PlayerRepository
+from app.business.automatic_tasks.matchmaking_job import MatchmakingJob
 from app.business.automatic_tasks.scheduler import Scheduler
+from app.business.matchmaking.elo_queue import EloQueue
+from app.business.game.matches import MatchService
+from app.persistence.cache.request_limits import RedisRequestLimiter
+from app.persistence.relational.match_repository import SqlMatchRepository
+from app.persistence.relational.search_repository import SqlSearchRepository
 from app.business.automatic_tasks.thumbnail_job import ThumbnailJob
 from app.business.catalog.content.cards.card_availability import CardAvailability
 from app.business.catalog.content.cards.card_directory import CardDirectory
@@ -22,7 +28,7 @@ from app.business.catalog.references.reference_service import ReferenceService
 from app.business.catalog.search.card_search_service import CardSearchService
 from app.business.catalog.thumbnails import ThumbnailPolicy
 from app.business.image_processing.image_processor import ImageProcessor
-from app.business.shared.ports import IdempotencyStore
+from app.business.shared.ports import IdempotencyStore, RequestLimiter
 from app.config.settings import Settings
 from app.persistence.cache.repeated_requests import RedisIdempotencyStore
 from app.persistence.cache.login_challenges import RedisLoginChallengeStore
@@ -60,6 +66,9 @@ class Container:
     players: PlayerRepository | None = None
     login_challenges: LoginChallengeStore | None = None
     token_issuer: TokenIssuer | None = None
+    elo_queue: EloQueue | None = None
+    matchmaking_scheduler: Scheduler | None = None
+    search_limiter: RequestLimiter | None = None
 
 
 def build_container(settings: Settings) -> Container:
@@ -122,7 +131,35 @@ def build_container(settings: Settings) -> Container:
         if settings.scheduler_enabled
         else None
     )
+    deck_service = DeckService(
+        SqlDeckRepository(session_factory),
+        CardDirectory(card_search_repository),
+        collection_repository,
+    )
+    searches = SqlSearchRepository(session_factory)
+    elo_queue = EloQueue(
+        searches,
+        deck_service,
+        MatchService(SqlMatchRepository(session_factory), players, searches),
+        players,
+        SqlCubeRepository(),
+        SqlTransactionManager(session_factory),
+        clock,
+    )
     return Container(
+        elo_queue=elo_queue,
+        matchmaking_scheduler=(
+            Scheduler(
+                [MatchmakingJob(elo_queue)], settings.matchmaking_interval_seconds
+            )
+            if settings.scheduler_enabled
+            else None
+        ),
+        search_limiter=RedisRequestLimiter(
+            redis_client,
+            settings.search_request_limit,
+            settings.search_request_window_seconds,
+        ),
         settings=settings,
         token_validator=TokenValidator(
             secret=settings.jwt_secret,
@@ -144,11 +181,7 @@ def build_container(settings: Settings) -> Container:
         ),
         initial_collection_service=collections,
         catalog_browser=CatalogBrowser(card_search_service, collection_repository),
-        deck_service=DeckService(
-            SqlDeckRepository(session_factory),
-            CardDirectory(card_search_repository),
-            collection_repository,
-        ),
+        deck_service=deck_service,
         players=players,
         login_challenges=RedisLoginChallengeStore(redis_client),
         token_issuer=TokenIssuer(

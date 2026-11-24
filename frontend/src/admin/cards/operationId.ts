@@ -11,7 +11,7 @@ export function newOperationId(): string {
 /**
  * Mantiene la llave de la operación en curso. Mientras el formulario no cambie, un
  * reintento (por ejemplo tras una falla de red) usa la misma llave y el servidor no
- * crea una carta duplicada. Si el administrador cambia algo, o la operación termina,
+ * duplica la operación. Si el usuario cambia el formulario o la operación termina,
  * la llave se descarta y la siguiente operación recibe una nueva.
  */
 export function useOperationKey() {
