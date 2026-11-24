@@ -24,9 +24,14 @@ export function PlayerLayout() {
               <NavLink to="/partida">Área de juego</NavLink>
             </li>
             {isPlayer && (
-              <li>
-                <NavLink to="/catalogo">Catálogo</NavLink>
-              </li>
+              <>
+                <li>
+                  <NavLink to="/catalogo">Catálogo</NavLink>
+                </li>
+                <li>
+                  <NavLink to="/mazos">Mis decks</NavLink>
+                </li>
+              </>
             )}
             {account?.role === "content_admin" && (
               <li>

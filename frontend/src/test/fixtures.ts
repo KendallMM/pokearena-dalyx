@@ -43,6 +43,11 @@ export function fakeServices(): ApiServices & {
     search: ReturnType<typeof vi.fn>;
     image: ReturnType<typeof vi.fn>;
   };
+  decks: {
+    list: ReturnType<typeof vi.fn>;
+    get: ReturnType<typeof vi.fn>;
+    create: ReturnType<typeof vi.fn>;
+  };
 } {
   return {
     references: { load: vi.fn().mockResolvedValue(REFERENCES) },
@@ -56,6 +61,11 @@ export function fakeServices(): ApiServices & {
       cardTypes: vi.fn().mockResolvedValue(REFERENCES.card_types),
       search: vi.fn().mockResolvedValue({ items: [], next_cursor: null }),
       image: vi.fn().mockResolvedValue(new Blob()),
+    },
+    decks: {
+      list: vi.fn().mockResolvedValue([]),
+      get: vi.fn(),
+      create: vi.fn().mockResolvedValue({ id: "deck-1", name: "Deck", card_codes: [] }),
     },
     sessions: { challenge: vi.fn(), signInGoogle: vi.fn(), me: vi.fn() },
   };

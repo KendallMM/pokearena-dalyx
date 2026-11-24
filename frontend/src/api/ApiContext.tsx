@@ -2,6 +2,7 @@ import { createContext, useContext, useMemo, type ReactNode } from "react";
 
 import { useSession } from "../session/SessionContext";
 import { createCardsApi, type CardsApi } from "./cards";
+import { createDecksApi, type DecksApi } from "./decks";
 import { createHttpClient } from "./httpClient";
 import { createLocationsApi, type LocationsApi } from "./locations";
 import { createPlayerCatalogApi, type PlayerCatalogApi } from "./playerCatalog";
@@ -14,6 +15,7 @@ export interface ApiServices {
   cards: CardsApi;
   locations: LocationsApi;
   playerCatalog: PlayerCatalogApi;
+  decks: DecksApi;
   sessions: ReturnType<typeof createSessionsApi>;
 }
 
@@ -29,6 +31,7 @@ export function ApiProvider({ children }: { children: ReactNode }) {
       cards: createCardsApi(http),
       locations: createLocationsApi(http),
       playerCatalog: createPlayerCatalogApi(http),
+      decks: createDecksApi(http),
       sessions: createSessionsApi(http),
     };
   }, [getToken]);

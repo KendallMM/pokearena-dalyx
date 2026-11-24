@@ -186,3 +186,20 @@ export interface PlayerCatalogPage {
   items: PlayerCatalogCard[];
   next_cursor: number | null;
 }
+
+/* Una carta dentro de un deck. */
+export type DeckCard = Omit<PlayerCatalogCard, "owned" | "copies">;
+
+/* GET /v1/mazos y /v1/mazos/{id}. */
+export interface PlayerDeck {
+  id: string;
+  name: string;
+  cards: DeckCard[];
+}
+
+/* Respuesta 201 de POST /v1/mazos. */
+export interface CreatedDeck {
+  id: string;
+  name: string;
+  card_codes: string[];
+}

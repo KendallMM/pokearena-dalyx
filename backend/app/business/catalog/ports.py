@@ -88,6 +88,10 @@ class CardSearchRepository(Protocol):
         ordenadas por id y con un máximo de limit."""
         ...
 
+    def find_ids_by_codes(self, codes: list[str]) -> dict[str, int]:
+        """Identificador de cada código; los que no existen no aparecen."""
+        ...
+
     def find_image_id(self, code: str, only_available: bool = False) -> str | None:
         """Identificador de la imagen de la carta, o None si la carta no existe.
 

@@ -18,9 +18,13 @@ from app.business.collection.initial_collection import (
     DeliveryStatus,
 )
 from app.persistence.relational.database import build_session_factory
+from app.business.collection.decks import DeckNameConflictError, deck_name_key
+from app.persistence.relational.deck_repository import SqlDeckRepository
 from app.persistence.relational.models import (
     CardRow,
     CubeMovementRow,
+    DeckCardRow,
+    DeckRow,
     ExternalIdentityRow,
     InitialCollectionDeliveryRow,
     PlayerCardRow,
@@ -151,3 +155,58 @@ def test_mysql_provider_subject_is_case_sensitive(
     )
     assert lower.id != upper.id
     assert repository.find_by_identity("google", f"a-{subject}").id == lower.id
+
+
+def test_mysql_simultaneous_decks_with_the_same_name_save_only_one(
+    mysql_sessions: sessionmaker[Session],
+) -> None:
+    """El UNIQUE de MySQL resuelve la carrera y no deja cartas huérfanas."""
+    player = SqlPlayerRepository(mysql_sessions).create(
+        ExternalIdentity("google", str(uuid4()), "deck@example.test", "Jugador")
+    )
+    batch = uuid4().hex[:6]
+    with mysql_sessions.begin() as session:
+        cards = [
+            CardRow(
+                code=f"D{batch}{index:02}",
+                name="Carta de deck",
+                search_name="carta de deck",
+                cost=1,
+                power=1,
+                card_type_id=1,
+                rarity_id=1,
+                ability_id=1,
+                image_id=str(uuid4()),
+                status="available",
+            )
+            for index in range(12)
+        ]
+        session.add_all(cards)
+        session.flush()
+        card_ids = [card.id for card in cards]
+    decks = SqlDeckRepository(mysql_sessions)
+    barrier = Barrier(2)
+
+    def add(_index: int) -> str:
+        barrier.wait(timeout=10)
+        try:
+            decks.add(player.id, "Fuego", deck_name_key("Fuego"), card_ids)
+            return "saved"
+        except DeckNameConflictError:
+            return "conflict"
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        assert sorted(pool.map(add, range(2))) == ["conflict", "saved"]
+    with mysql_sessions() as session:
+        deck_ids = list(
+            session.scalars(select(DeckRow.id).where(DeckRow.player_id == player.id))
+        )
+        assert len(deck_ids) == 1
+        assert (
+            session.scalar(
+                select(func.count())
+                .select_from(DeckCardRow)
+                .where(DeckCardRow.deck_id.in_(deck_ids))
+            )
+            == 12
+        )

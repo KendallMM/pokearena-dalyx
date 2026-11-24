@@ -1,11 +1,13 @@
 """Consulta de cartas para la búsqueda, sobre MySQL."""
 
 from sqlalchemy import select
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session, aliased, sessionmaker
 
 from app.business.catalog.content.cards.models import CardStatus
 from app.business.catalog.references.models import Ability, CardType, Rarity
 from app.business.catalog.search.models import CardCriteria, CardSummary
+from app.business.shared.errors import ServiceUnavailableError
 from app.persistence.relational.models import (
     AbilityRow,
     CardRow,
@@ -89,6 +91,16 @@ class SqlCardSearchRepository:
                     statement
                 )
             ]
+
+    def find_ids_by_codes(self, codes: list[str]) -> dict[str, int]:
+        statement = select(CardRow.code, CardRow.id).where(CardRow.code.in_(codes))
+        try:
+            with self._session_factory() as session:
+                return {code: card_id for code, card_id in session.execute(statement)}
+        except SQLAlchemyError as exc:
+            raise ServiceUnavailableError(
+                "No se pudieron consultar las cartas. Reintenta."
+            ) from exc
 
     def find_image_id(self, code: str, only_available: bool = False) -> str | None:
         statement = select(CardRow.image_id).where(CardRow.code == code)

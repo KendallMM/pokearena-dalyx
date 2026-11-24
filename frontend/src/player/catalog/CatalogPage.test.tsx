@@ -49,8 +49,10 @@ describe("CatalogPage", () => {
     expect(within(owned).getByText("Tienes 2 copias")).toBeInTheDocument();
     const missing = screen.getByText("Vulpix").closest("li")!;
     expect(within(missing).getByText("No la tienes")).toBeInTheDocument();
-    expect(services.playerCatalog.image).toHaveBeenCalledWith(
-      "/v1/cartas/PKA-FUE-001/imagen",
+    await waitFor(() =>
+      expect(services.playerCatalog.image).toHaveBeenCalledWith(
+        "/v1/cartas/PKA-FUE-001/imagen",
+      ),
     );
   });
 
