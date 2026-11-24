@@ -5,8 +5,18 @@ from fastapi import APIRouter, Depends, Request, Response
 from app.api.gateway.authentication import require_player
 from app.api.gateway.errors import AUTH_ERROR_RESPONSES, ErrorResponse
 from app.api.gateway.idempotency import IDEMPOTENCY_HEADER, MAX_KEY_LENGTH
-from app.api.gateway.search_access import SearchAccess, require_search_access
-from app.api.schemas.player_searches import SearchRequest, SearchResponse
+from app.api.gateway.search_access import (
+    SearchAccess,
+    require_bot_access,
+    require_search_access,
+)
+from app.api.schemas.player_searches import (
+    BotMatchResponse,
+    CancelSearchResponse,
+    SearchRequest,
+    SearchResponse,
+    SearchStatusResponse,
+)
 from app.business.identity_access.roles import Actor
 from app.business.matchmaking.elo_queue import EloQueue
 from app.business.shared.errors import ServiceUnavailableError
@@ -90,14 +100,57 @@ def create_search(
     return result
 
 
-@router.get("/actual", response_model=SearchResponse | None, responses=SEARCH_ERRORS)
+@router.post(
+    "/{search_id}/bot",
+    status_code=201,
+    response_model=BotMatchResponse,
+    responses={
+        **SEARCH_ERRORS,
+        **{code: {"model": ErrorResponse} for code in (400, 409, 429)},
+        "4XX": {"model": ErrorResponse},
+    },
+    openapi_extra={
+        "parameters": [
+            {
+                "name": IDEMPOTENCY_HEADER,
+                "in": "header",
+                "required": True,
+                "schema": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": MAX_KEY_LENGTH,
+                },
+            }
+        ]
+    },
+)
+def accept_bot(
+    search_id: str,
+    response: Response,
+    access: SearchAccess = Depends(require_bot_access),
+    queue: EloQueue = Depends(get_queue),
+) -> BotMatchResponse:
+    # Fila por Elo retorna después de confirmar la partida en MySQL.
+    match_id = queue.accept_bot(access.actor.user_id, search_id, access.key_hash)
+    result = BotMatchResponse(match_id=match_id)
+    access.respond(response, result, created=True, creation_status=201)
+    return result
+
+
+@router.get("/actual", response_model=SearchStatusResponse, responses=SEARCH_ERRORS)
 def current_search(
     response: Response,
     actor: Actor = Depends(require_player),
     queue: EloQueue = Depends(get_queue),
 ):
+    # Cada consulta llega al servidor para registrar la actividad del jugador.
     response.headers["Cache-Control"] = "no-store"
-    return queue.current(actor.user_id)
+    search, wait_seconds, bot_available = queue.consult(actor.user_id)
+    return SearchStatusResponse(
+        **SearchResponse.model_validate(search).model_dump(),
+        wait_seconds=wait_seconds,
+        bot_available=bot_available,
+    )
 
 
 @router.get("/{search_id}", response_model=SearchResponse, responses=SEARCH_ERRORS)
@@ -111,8 +164,10 @@ def get_search(
     return queue.get(actor.user_id, search_id)
 
 
-@router.post(
-    "/{search_id}/cancelar", response_model=SearchResponse, responses=SEARCH_ERRORS
+@router.delete(
+    "/{search_id}",
+    response_model=CancelSearchResponse,
+    responses={**SEARCH_ERRORS, 409: {"model": ErrorResponse}},
 )
 def cancel_search(
     search_id: str,
@@ -120,5 +175,10 @@ def cancel_search(
     actor: Actor = Depends(require_player),
     queue: EloQueue = Depends(get_queue),
 ):
+    # Fila por Elo distingue una cancelación nueva de una búsqueda ya cerrada.
     response.headers["Cache-Control"] = "no-store"
-    return queue.cancel(actor.user_id, search_id)
+    search, already_ended = queue.leave_with_outcome(actor.user_id, search_id)
+    return CancelSearchResponse(
+        **SearchResponse.model_validate(search).model_dump(),
+        already_ended=already_ended,
+    )

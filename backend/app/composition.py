@@ -12,9 +12,13 @@ from app.business.collection.decks import DeckService
 from app.business.collection.initial_collection import InitialCollectionService
 from app.business.identity_access.session_service import SessionService
 from app.business.identity_access.ports import LoginChallengeStore, PlayerRepository
-from app.business.automatic_tasks.matchmaking_job import MatchmakingJob
+from app.business.automatic_tasks.matchmaking_job import (
+    ExpireSearchesJob,
+    MatchmakingJob,
+)
 from app.business.automatic_tasks.scheduler import Scheduler
 from app.business.matchmaking.elo_queue import EloQueue
+from app.business.matchmaking.bot import Bot
 from app.business.game.matches import MatchService
 from app.persistence.cache.request_limits import RedisRequestLimiter
 from app.persistence.relational.match_repository import SqlMatchRepository
@@ -145,12 +149,21 @@ def build_container(settings: Settings) -> Container:
         SqlCubeRepository(),
         SqlTransactionManager(session_factory),
         clock,
+        bot=Bot(CardAvailability(card_repository), SystemRandomSource()),
+        inactivity_seconds=settings.search_inactivity_seconds,
     )
     return Container(
         elo_queue=elo_queue,
         matchmaking_scheduler=(
             Scheduler(
-                [MatchmakingJob(elo_queue)], settings.matchmaking_interval_seconds
+                [
+                    ExpireSearchesJob(elo_queue),
+                    MatchmakingJob(elo_queue),
+                ],
+                settings.matchmaking_interval_seconds,
+                job_intervals={
+                    ExpireSearchesJob.name: settings.search_expiry_interval_seconds
+                },
             )
             if settings.scheduler_enabled
             else None

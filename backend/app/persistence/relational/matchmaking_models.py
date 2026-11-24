@@ -17,7 +17,14 @@ def define_matchmaking_tables(
         sa.Column(
             "created_at", sa.DateTime(), nullable=False, server_default=sa.func.now()
         ),
-        sa.CheckConstraint("mode IN ('ranked', 'tournament')", name="ck_matches_mode"),
+        sa.Column("bot_card_ids", sa.JSON(none_as_null=True)),
+        sa.CheckConstraint(
+            "mode IN ('ranked', 'tournament', 'bot')", name="ck_matches_mode"
+        ),
+        sa.CheckConstraint(
+            "(mode = 'bot' AND bot_card_ids IS NOT NULL) OR (mode <> 'bot' AND bot_card_ids IS NULL)",
+            name="ck_matches_bot",
+        ),
     )
     participants = sa.Table(
         "match_players",
@@ -58,16 +65,22 @@ def define_matchmaking_tables(
         sa.Column("match_id", sa.String(36), sa.ForeignKey("matches.id")),
         sa.Column("error", sa.String(255)),
         sa.Column(
+            "last_seen_at",
+            sa.DateTime().with_variant(DATETIME(fsp=6), "mysql"),
+            nullable=False,
+        ),
+        sa.Index("ix_search_activity", "status", "last_seen_at"),
+        sa.Column(
             "open_player_id",
             sa.String(36),
             sa.Computed(
-                "CASE WHEN status IN ('waiting', 'reserved') THEN player_id ELSE NULL END"
+                "CASE WHEN status IN ('waiting', 'reserved', 'bot') THEN player_id ELSE NULL END"
             ),
         ),
         sa.UniqueConstraint("open_player_id", name="uq_search_open_player"),
         sa.CheckConstraint("mode IN ('ranked', 'tournament')", name="ck_search_mode"),
         sa.CheckConstraint(
-            "status IN ('waiting', 'reserved', 'found', 'cancelled')",
+            "status IN ('waiting', 'reserved', 'bot', 'found', 'cancelled', 'expired')",
             name="ck_search_status",
         ),
         sa.CheckConstraint(

@@ -1,5 +1,6 @@
 """Operaciones de partida dentro de la transacción del caso de uso."""
 
+from dataclasses import dataclass
 from typing import Protocol
 from uuid import uuid4
 
@@ -30,6 +31,10 @@ class MatchRepository(Protocol):
         entries: tuple[MatchEntry, MatchEntry],
     ) -> None: ...
 
+    def add_bot(
+        self, tx: Transaction, match_id: str, entry: MatchEntry, bot_cards: list[int]
+    ) -> None: ...
+
 
 class PlayerLocks(Protocol):
     def lock_players(self, tx: Transaction, player_ids: list[str]) -> None: ...
@@ -39,6 +44,13 @@ class MatchSearches(Protocol):
     def open_for_player(
         self, tx: Transaction, player_id: str
     ) -> tuple[str, str] | None: ...
+
+
+@dataclass(frozen=True)
+class BotOpponent:
+    """Rival de una sola partida y su selección inmutable de cartas."""
+
+    card_ids: tuple[int, ...]
 
 
 class MatchService:
@@ -72,4 +84,17 @@ class MatchService:
                 raise ConflictError("Uno de los jugadores tiene una búsqueda abierta.")
         match_id = str(uuid4())
         self.repository.add(tx, match_id, first.mode, (first, second))
+        return match_id
+
+    def create_against_bot(
+        self, tx: Transaction, entry: MatchEntry, opponent: BotOpponent
+    ) -> str:
+        """Registra al rival dentro de la partida. Solo el humano ocupa un cupo activo."""
+        self.players.lock_players(tx, [entry.player_id])
+        if self.active(entry.player_id, tx):
+            raise ConflictError("El jugador ya tiene una partida activa.")
+        if self.searches.open_for_player(tx, entry.player_id) != (entry.id, "bot"):
+            raise ConflictError("La búsqueda no está reservada para el bot.")
+        match_id = str(uuid4())
+        self.repository.add_bot(tx, match_id, entry, list(opponent.card_ids))
         return match_id

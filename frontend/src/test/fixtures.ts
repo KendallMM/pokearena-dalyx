@@ -1,6 +1,7 @@
 import { vi } from "vitest";
 
 import type { ApiServices } from "../api/ApiContext";
+import { ApiError } from "../api/errors";
 import type { CreateCardResult, CreateLocationResult, References } from "../api/types";
 
 export const REFERENCES: References = {
@@ -68,10 +69,13 @@ export function fakeServices(): ApiServices & {
       create: vi.fn().mockResolvedValue({ id: "deck-1", name: "Deck", card_codes: [] }),
     },
     searches: {
-      current: vi.fn().mockResolvedValue(null),
+      current: vi
+        .fn()
+        .mockRejectedValue(new ApiError(404, "not_found", "Sin búsqueda")),
       get: vi.fn(),
       enter: vi.fn(),
       cancel: vi.fn(),
+      acceptBot: vi.fn(),
     },
     sessions: { challenge: vi.fn(), signInGoogle: vi.fn(), me: vi.fn() },
   };

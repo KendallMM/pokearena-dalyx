@@ -389,6 +389,49 @@ h1 {
   grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
 }
 
+.ranked-queue__details {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 11rem), 1fr));
+  gap: 0.75rem;
+  margin: 0;
+}
+
+.ranked-queue__details > div {
+  display: grid;
+  align-content: center;
+  gap: 0.2rem;
+  padding: 0.85rem 1rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-control);
+  background: var(--color-field);
+}
+
+.ranked-queue__details dt {
+  color: var(--color-muted);
+  font-size: 0.875rem;
+}
+
+.ranked-queue__details dd {
+  margin: 0;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.ranked-queue__details .ranked-queue__time {
+  background: var(--color-info-bg);
+}
+
+.ranked-queue__time dd {
+  font-size: clamp(1.85rem, 4vw, 2.5rem);
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+}
+
+.ranked-queue__actions {
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--color-border);
+}
+
 .search-area__count {
   margin: 0 0 1rem;
   font-weight: 600;

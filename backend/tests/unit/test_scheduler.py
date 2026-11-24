@@ -68,3 +68,40 @@ def test_thumbnail_job_asks_cards_to_process_pending(
     )
     ThumbnailJob(card_service).run()
     assert card_repository.rows[1]["status"].value == "available"
+
+
+def test_scheduler_runs_jobs_with_independent_intervals(monkeypatch):
+    now = 0.0
+    events = []
+
+    class TimedJob:
+        def __init__(self, name):
+            self.name = name
+
+        def run(self):
+            events.append((self.name, now))
+
+    scheduler = Scheduler(
+        [TimedJob("match"), TimedJob("expire")],
+        2,
+        job_intervals={"expire": 3},
+    )
+
+    def advance(seconds):
+        nonlocal now
+        now += seconds
+        if now > 6:
+            scheduler._stop.set()
+
+    monkeypatch.setattr("app.business.automatic_tasks.scheduler.monotonic", lambda: now)
+    monkeypatch.setattr(scheduler._stop, "wait", advance)
+    scheduler._loop()
+    assert events == [
+        ("match", 0),
+        ("expire", 0),
+        ("match", 2),
+        ("expire", 3),
+        ("match", 4),
+        ("match", 6),
+        ("expire", 6),
+    ]

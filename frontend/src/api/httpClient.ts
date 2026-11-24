@@ -11,7 +11,8 @@ export interface HttpClient {
   /** GET que reutiliza la respuesta guardada cuando el servidor responde 304 (ETag). */
   getCached<T>(path: string): Promise<T>;
   /* GET de una respuesta JSON que cambia seguido, sin guardarla. */
-  getJson<T>(path: string): Promise<T>;
+  getJson<T>(path: string, cache?: RequestCache): Promise<T>;
+  deleteJson<T>(path: string): Promise<T>;
   /* GET de un archivo, por ejemplo una imagen que pide sesión. */
   getBlob(path: string): Promise<Blob>;
   /** POST de un formulario con archivos. */
@@ -81,8 +82,12 @@ export function createHttpClient({
     );
   }
 
-  async function get(path: string): Promise<Response> {
-    const response = await send(path, { method: "GET", headers: authHeaders() });
+  async function get(path: string, cache?: RequestCache): Promise<Response> {
+    const response = await send(path, {
+      method: "GET",
+      headers: authHeaders(),
+      ...(cache && { cache }),
+    });
     if (!response.ok) throw await toError(response);
     return response;
   }
@@ -101,8 +106,14 @@ export function createHttpClient({
       if (!response.ok) throw await toError(response);
       return (await response.json()) as T;
     },
-    async getJson<T>(path: string): Promise<T> {
-      return (await (await get(path)).json()) as T;
+    async getJson<T>(path: string, cache?: RequestCache): Promise<T> {
+      return (await (await get(path, cache)).json()) as T;
+    },
+
+    async deleteJson<T>(path: string): Promise<T> {
+      const response = await send(path, { method: "DELETE", headers: authHeaders() });
+      if (!response.ok) throw await toError(response);
+      return (await response.json()) as T;
     },
 
     async getBlob(path: string): Promise<Blob> {

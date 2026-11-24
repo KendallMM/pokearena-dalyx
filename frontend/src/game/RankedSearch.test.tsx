@@ -1,11 +1,12 @@
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { MemoryRouter } from "react-router-dom";
+import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 import { afterEach, expect, it, vi } from "vitest";
 
 import { ApiServicesProvider } from "../api/ApiContext";
 import { ApiError } from "../api/errors";
 import type { MatchSearch } from "../api/searches";
 import { fakeServices } from "../test/fixtures";
+import { AssignedMatchPage } from "./AssignedMatchPage";
 import { RankedSearch } from "./RankedSearch";
 
 const waiting: MatchSearch = {
@@ -18,13 +19,22 @@ const waiting: MatchSearch = {
   error: null,
 };
 
-function setup() {
+function Location() {
+  return <output aria-label="Ruta actual">{useLocation().pathname}</output>;
+}
+
+function setup(current?: MatchSearch) {
   const services = fakeServices();
+  if (current) vi.mocked(services.searches.current).mockResolvedValue(current);
   services.decks.list.mockResolvedValue([{ id: "deck-1", name: "Llamas", cards: [] }]);
   render(
     <MemoryRouter>
       <ApiServicesProvider services={services}>
-        <RankedSearch />
+        <Routes>
+          <Route path="/partida/:matchId" element={<AssignedMatchPage />} />
+          <Route path="*" element={<RankedSearch />} />
+        </Routes>
+        <Location />
       </ApiServicesProvider>
     </MemoryRouter>,
   );
@@ -41,12 +51,13 @@ it("envía un solo ingreso, consulta el resultado y mantiene fijo el deck", asyn
       accept = resolve;
     }),
   );
-  vi.mocked(api.get).mockResolvedValue({
+  vi.mocked(api.current).mockResolvedValue({
     ...waiting,
     status: "found",
     match_id: "match-1",
   });
   const select = await screen.findByLabelText("Deck");
+  expect(screen.getByText("No tienes una búsqueda de partida")).toBeVisible();
   const button = screen.getByRole("button", { name: "Buscar partida" });
   fireEvent.change(select, { target: { value: "deck-1" } });
   fireEvent.click(button);
@@ -60,11 +71,33 @@ it("envía un solo ingreso, consulta el resultado y mantiene fijo el deck", asyn
   expect(screen.getByText("Buscando rival")).toBeVisible();
   expect(screen.queryByLabelText("Deck")).not.toBeInTheDocument();
   await act(async () => {
-    await vi.advanceTimersByTimeAsync(2000);
+    await vi.advanceTimersByTimeAsync(3000);
   });
-  expect(api.get).toHaveBeenCalledWith("search-1");
-  expect(screen.getByText("Partida encontrada: match-1")).toBeVisible();
+  vi.useRealTimers();
+  expect(await screen.findByText("Partida encontrada: match-1")).toBeVisible();
+  expect(api.current).toHaveBeenCalledTimes(3);
+  expect(screen.getByLabelText("Ruta actual")).toHaveTextContent("/partida/match-1");
   expect(screen.queryByLabelText("Deck")).not.toBeInTheDocument();
+});
+
+it("muestra la oferta del servidor y repite la misma clave si falla al aceptarla", async () => {
+  const api = setup({ ...waiting, wait_seconds: 60, bot_available: true });
+  vi.mocked(api.acceptBot)
+    .mockRejectedValueOnce(new ApiError(503, "service_unavailable", "Reintenta."))
+    .mockResolvedValueOnce({ match_id: "partida-bot" });
+  expect(await screen.findByText("1:00")).toBeVisible();
+  const accept = screen.getByRole("button", { name: "Jugar contra el bot" });
+  fireEvent.click(accept);
+  expect(await screen.findByText("Reintenta.")).toBeVisible();
+  fireEvent.click(accept);
+  await waitFor(() =>
+    expect(screen.getByLabelText("Ruta actual")).toHaveTextContent(
+      "/partida/partida-bot",
+    ),
+  );
+  const calls = vi.mocked(api.acceptBot).mock.calls;
+  expect(calls[0]).toEqual(["search-1", expect.any(String)]);
+  expect(calls[0]).toEqual(calls[1]);
 });
 
 it("muestra el saldo del servidor y conserva la clave de una solicitud reintentada", async () => {
@@ -94,4 +127,62 @@ it("muestra el saldo del servidor y conserva la clave de una solicitud reintenta
   fireEvent.click(screen.getByRole("button", { name: "Salir de la búsqueda" }));
   await waitFor(() => expect(screen.getByLabelText("Deck")).toBeVisible());
   expect(api.cancel).toHaveBeenCalledWith("search-1");
+  expect(screen.getByText("Búsqueda cancelada")).toBeVisible();
+});
+
+it("conserva el conflicto de cancelación al abrir la partida asignada", async () => {
+  const api = setup(waiting);
+  vi.mocked(api.cancel).mockRejectedValue(
+    new ApiError(
+      409,
+      "conflict",
+      "La búsqueda ya encontró la partida match-1.",
+      "match_id",
+    ),
+  );
+  const cancel = await screen.findByRole("button", { name: "Salir de la búsqueda" });
+  vi.mocked(api.current).mockResolvedValue({
+    ...waiting,
+    status: "found",
+    match_id: "match-1",
+  });
+  fireEvent.click(cancel);
+  expect(
+    await screen.findByRole("heading", { name: "Partida asignada" }),
+  ).toBeVisible();
+  expect(await screen.findByText("No se pudo cancelar la búsqueda")).toBeVisible();
+  expect(screen.getByText("La búsqueda ya encontró la partida match-1.")).toBeVisible();
+});
+
+it("distingue al salir de una búsqueda que ya había terminado", async () => {
+  const api = setup(waiting);
+  vi.mocked(api.cancel).mockResolvedValue({
+    ...waiting,
+    status: "expired",
+    already_ended: true,
+  });
+  fireEvent.click(await screen.findByRole("button", { name: "Salir de la búsqueda" }));
+  expect(await screen.findByText("La búsqueda ya había terminado")).toBeVisible();
+  expect(screen.getByText("Expirada por inactividad.")).toBeVisible();
+});
+
+it("conserva el conflicto del bot al abrir la partida asignada", async () => {
+  const api = setup({ ...waiting, bot_available: true });
+  vi.mocked(api.acceptBot).mockRejectedValue(
+    new ApiError(
+      409,
+      "conflict",
+      "La búsqueda ya encontró la partida match-1.",
+      "match_id",
+    ),
+  );
+  const accept = await screen.findByRole("button", { name: "Jugar contra el bot" });
+  vi.mocked(api.current).mockResolvedValue({
+    ...waiting,
+    status: "found",
+    match_id: "match-1",
+  });
+  fireEvent.click(accept);
+  expect(await screen.findByText("No se pudo aceptar la oferta del bot")).toBeVisible();
+  expect(screen.getByText("La búsqueda ya encontró la partida match-1.")).toBeVisible();
 });

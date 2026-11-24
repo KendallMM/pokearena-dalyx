@@ -25,6 +25,22 @@ class SqlMatchRepository:
         with self.sessions() as session:
             return session.scalar(query)
 
+    def add_bot(
+        self, tx: Transaction, match_id: str, entry: MatchEntry, bot_cards: list[int]
+    ) -> None:
+        session = session_of(tx)
+        session.execute(
+            insert(matches).values(id=match_id, mode="bot", bot_card_ids=bot_cards)
+        )
+        session.execute(
+            insert(match_players).values(
+                match_id=match_id,
+                player_id=entry.player_id,
+                deck_id=entry.deck_id,
+                card_ids=entry.card_ids,
+            )
+        )
+
     def add(
         self,
         tx: Transaction,
