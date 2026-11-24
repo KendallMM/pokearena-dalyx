@@ -1,12 +1,13 @@
-from contextlib import nullcontext
+from contextlib import contextmanager, nullcontext
 from dataclasses import replace
-from unittest.mock import Mock
+from unittest.mock import Mock, call
 from datetime import datetime, timedelta, timezone
 
 import pytest
 
+from app.business.automatic_tasks.matchmaking_job import ExpireSearchesJob
 from app.business.collection.decks import DeckService, validate_composition
-from app.business.game.matches import MatchService
+from app.business.game.matches import BotOpponent, MatchService
 from app.business.matchmaking.elo_queue import (
     EloQueue,
     Search,
@@ -142,6 +143,69 @@ def test_invalid_deck_composition(cards):
 
 def test_valid_deck_composition():
     validate_composition(list(range(12)), dict.fromkeys(range(12), 1))
+
+
+@pytest.mark.parametrize("reserved", [0, 1])
+def test_bot_reservation_precedes_bot_and_match_creation(reserved):
+    calls = Mock()
+    repo, matches, bot, tx = calls.repo, calls.matches, calls.bot, Mock()
+    entry = replace(search("a", 0, 60), last_seen_at=NOW)
+    repo.operation.return_value = None
+    repo.in_transaction.return_value = entry
+    repo.reserve_bot.return_value = reserved
+    repo.found_bot.return_value = 1
+    matches.create_against_bot.return_value = "match"
+    bot.prepare.return_value = BotOpponent(tuple(range(12)))
+    clock = Mock()
+    clock.now.return_value = NOW
+
+    @contextmanager
+    def transaction():
+        yield tx
+        calls.commit()
+
+    manager = Mock()
+    manager.begin.side_effect = transaction
+    queue = EloQueue(repo, Mock(), matches, Mock(), Mock(), manager, clock, bot=bot)
+    if not reserved:
+        with pytest.raises(ConflictError):
+            queue.accept_bot("a", entry.id, "key")
+        bot.prepare.assert_not_called()
+        matches.create_against_bot.assert_not_called()
+        calls.commit.assert_not_called()
+    else:
+        assert queue.accept_bot("a", entry.id, "key") == "match"
+        assert [call[0] for call in calls.mock_calls][-6:] == [
+            "repo.reserve_bot",
+            "bot.prepare",
+            "matches.create_against_bot",
+            "repo.found_bot",
+            "repo.record_operation",
+            "commit",
+        ]
+
+
+def test_expiry_job_delegates_each_time_it_is_invoked():
+    queue = Mock()
+    job = ExpireSearchesJob(queue)
+    job.run()
+    queue.expire_abandoned.assert_called_once_with()
+
+
+@pytest.mark.parametrize("updated", [True, False])
+def test_cancel_only_diagnoses_when_update_does_not_change_a_row(updated):
+    repo, tx, manager = Mock(), Mock(), Mock()
+    manager.begin.return_value = nullcontext(tx)
+    cancelled = replace(search("a", 0, 1), status="cancelled")
+    repo.cancel_waiting.return_value = cancelled if updated else None
+    repo.in_transaction.return_value = cancelled
+    queue = EloQueue(repo, Mock(), Mock(), Mock(), Mock(), manager, Mock())
+
+    assert queue.leave("a", cancelled.id) is cancelled
+    expected = [call.cancel_waiting(tx, "a", cancelled.id)]
+    if not updated:
+        expected.append(call.in_transaction(tx, "a", cancelled.id))
+    assert repo.mock_calls == expected
 
 
 def test_missing_and_foreign_decks_share_the_same_error():

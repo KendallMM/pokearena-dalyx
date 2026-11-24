@@ -20,9 +20,10 @@ MAX_KEY_LENGTH = 128
 class IdempotentReplay(Exception):
     """La operación ya fue registrada: se devuelve su respuesta guardada."""
 
-    def __init__(self, stored: StoredResponse) -> None:
+    def __init__(self, stored: StoredResponse, *, no_store: bool = False) -> None:
         super().__init__("Operación ya registrada")
         self.stored = stored
+        self.no_store = no_store
 
 
 @dataclass
@@ -92,10 +93,13 @@ def _open_context(
 
 def _replay_handler(request: Request, exc: Exception) -> JSONResponse:
     assert isinstance(exc, IdempotentReplay)
+    headers = {REPLAY_HEADER: "true"}
+    if exc.no_store:
+        headers["Cache-Control"] = "no-store"
     return JSONResponse(
         status_code=exc.stored.status_code,
         content=exc.stored.body,
-        headers={REPLAY_HEADER: "true"},
+        headers=headers,
     )
 
 

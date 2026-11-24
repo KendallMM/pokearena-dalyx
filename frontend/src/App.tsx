@@ -8,6 +8,7 @@ import { MainMenuPage } from "./admin/MainMenuPage";
 import { LoginPage } from "./auth/LoginPage";
 import { RequireAccount } from "./auth/RequireAccount";
 import { PlayerGamePage } from "./game/PlayerGamePage";
+import { AssignedMatchPage } from "./game/AssignedMatchPage";
 import { CatalogPage } from "./player/catalog/CatalogPage";
 import { CreateDeckPage } from "./player/decks/CreateDeckPage";
 import { DeckDetailPage } from "./player/decks/DeckDetailPage";
@@ -24,6 +25,7 @@ export function App() {
       <Route element={<RequireAccount />}>
         <Route element={<PlayerLayout />}>
           <Route path="/partida" element={<PlayerGamePage />} />
+          <Route path="/partida/:matchId" element={<AssignedMatchPage />} />
           <Route path="/catalogo" element={<CatalogPage />} />
           <Route path="/mazos" element={<DecksPage />} />
           <Route path="/mazos/nuevo" element={<CreateDeckPage />} />

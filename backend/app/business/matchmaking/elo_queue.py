@@ -2,21 +2,25 @@
 
 import logging
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timedelta
+from hashlib import sha256
 from typing import Protocol
 from uuid import uuid4
 
 from app.business.collection.decks import DeckService
 from app.business.game.matches import MatchService
+from app.business.matchmaking.bot import Bot
 from app.business.shared.errors import (
     ConflictError,
     NotFoundError,
+    ServiceUnavailableError,
     ValidationFailedError,
 )
 from app.business.shared.ports import Clock, Transaction, TransactionManager
 
 logger = logging.getLogger(__name__)
 MIN_CUBES = 8
+BOT_OFFER_SECONDS = 60
 INITIAL_RANGE = 100
 RANGE_INCREMENT = 50
 RANGE_INTERVAL = 10
@@ -36,6 +40,7 @@ class Search:
     created_at: datetime
     match_id: str | None = None
     error: str | None = None
+    last_seen_at: datetime | None = None
 
 
 class SearchRepository(Protocol):
@@ -46,12 +51,23 @@ class SearchRepository(Protocol):
         self, tx: Transaction, search: Search, key_hash: str
     ) -> None: ...
     def add(self, tx: Transaction, search: Search) -> Search: ...
-    def current(self, player_id: str) -> Search | None: ...
-    def get(self, player_id: str, search_id: str) -> Search | None: ...
-    def cancel(
+    def consult(
+        self, tx: Transaction, player_id: str, now: datetime, cutoff: datetime
+    ) -> Search | None: ...
+    def in_transaction(
         self, tx: Transaction, player_id: str, search_id: str
     ) -> Search | None: ...
-    def waiting(self) -> list[Search]: ...
+    def expire(self, tx: Transaction, cutoff: datetime) -> int: ...
+    def cancel_waiting(
+        self, tx: Transaction, player_id: str, search_id: str
+    ) -> Search | None: ...
+    def reserve_bot(self, tx: Transaction, search_id: str, cutoff: datetime) -> int: ...
+    def found_bot(self, tx: Transaction, search_id: str, match_id: str) -> int: ...
+    def count_abandoned(
+        self, tx: Transaction, ids: tuple[str, str], cutoff: datetime
+    ) -> int: ...
+    def get(self, player_id: str, search_id: str) -> Search | None: ...
+    def waiting(self, cutoff: datetime | None = None) -> list[Search]: ...
     def reserve(self, tx: Transaction, ids: tuple[str, str]) -> int: ...
     def found(self, tx: Transaction, ids: tuple[str, str], match_id: str) -> int: ...
     def record_failure(self, ids: tuple[str, str], message: str) -> None: ...
@@ -115,6 +131,9 @@ class EloQueue:
         cubes: CubeBalances,
         transactions: TransactionManager,
         clock: Clock,
+        *,
+        bot: Bot | None = None,
+        inactivity_seconds: int = 15,
     ) -> None:
         self.searches = searches
         self.decks = decks
@@ -123,6 +142,8 @@ class EloQueue:
         self.cubes = cubes
         self.transactions = transactions
         self.clock = clock
+        self.bot = bot
+        self.inactivity = timedelta(seconds=inactivity_seconds)
 
     def enter(
         self,
@@ -171,6 +192,7 @@ class EloQueue:
                     f"Tienes {balance} cubos. Necesitas al menos {MIN_CUBES} para buscar partida clasificatoria. Compra cubos para continuar.",
                     "cubes",
                 )
+            started_at = self.clock.now()
             proposed = Search(
                 str(uuid4()),
                 player_id,
@@ -179,7 +201,8 @@ class EloQueue:
                 elo,
                 mode,
                 "waiting",
-                self.clock.now(),
+                started_at,
+                last_seen_at=started_at,
             )
             search = self.searches.add(tx, proposed)
             if search.mode != mode or search.deck_id != deck_id:
@@ -195,16 +218,119 @@ class EloQueue:
         logger.info("Búsqueda %s %s", search.id, "creada" if created else "reutilizada")
         return search, created
 
-    def current(self, player_id: str) -> Search | None:
-        return self.searches.current(player_id)
+    def consult(self, player_id: str) -> tuple[Search, int, bool]:
+        """Registra actividad vigente y devuelve la búsqueda, la espera y la oferta."""
+        with self.transactions.begin() as tx:
+            self.players.lock_players(tx, [player_id])
+            now = self.clock.now()
+            search = self._require(
+                self.searches.consult(tx, player_id, now, now - self.inactivity)
+            )
+        wait = max(0, int((now - search.created_at).total_seconds()))
+        return search, wait, self._offers_bot(search, now)
+
+    def _offers_bot(self, search: Search, now: datetime) -> bool:
+        return (
+            search.mode == "ranked"
+            and search.status == "waiting"
+            and (search.last_seen_at or search.created_at) >= now - self.inactivity
+            and (now - search.created_at).total_seconds() >= BOT_OFFER_SECONDS
+        )
+
+    def leave(self, player_id: str, search_id: str) -> Search:
+        search, _ = self.leave_with_outcome(player_id, search_id)
+        return search
+
+    def leave_with_outcome(self, player_id: str, search_id: str) -> tuple[Search, bool]:
+        """Devuelve la búsqueda y si ya estaba terminada al solicitar la salida."""
+        with self.transactions.begin() as tx:
+            self.players.lock_players(tx, [player_id])
+            cancelled = self.searches.cancel_waiting(tx, player_id, search_id)
+            if cancelled is not None:
+                return cancelled, False
+            search = self._require(
+                self.searches.in_transaction(tx, player_id, search_id)
+            )
+            if search.status == "found":
+                raise ConflictError(
+                    f"La búsqueda ya encontró la partida {search.match_id}.", "match_id"
+                )
+            return search, True
+
+    def expire_abandoned(self) -> int:
+        """Marca como expiradas las búsquedas que superaron el límite de inactividad."""
+        with self.transactions.begin() as tx:
+            return self.searches.expire(tx, self.clock.now() - self.inactivity)
+
+    def accept_bot(self, player_id: str, search_id: str, key_hash: str) -> str:
+        """Reserva la búsqueda y confirma la partida y su clave en la misma transacción."""
+        # Separa las claves de ingreso a la fila y las de aceptación del bot.
+        operation_key = sha256(f"bot:{search_id}:{key_hash}".encode()).hexdigest()
+        try:
+            with self.transactions.begin() as tx:
+                self.players.lock_players(tx, [player_id])
+                previous = self.searches.operation(tx, player_id, operation_key)
+                if previous is not None and previous.match_id:
+                    return previous.match_id
+                search = self._require(
+                    self.searches.in_transaction(tx, player_id, search_id)
+                )
+                now = self.clock.now()
+                if not self._offers_bot(search, now):
+                    raise self._bot_conflict(search)
+                if self.searches.reserve_bot(tx, search.id, now - self.inactivity) != 1:
+                    # El diagnóstico distingue una partida asignada de otros
+                    # motivos por los que la búsqueda ya no admite la oferta.
+                    current = self._require(
+                        self.searches.in_transaction(tx, player_id, search_id)
+                    )
+                    raise self._bot_conflict(current)
+                if self.bot is None:
+                    raise ServiceUnavailableError(
+                        "La oferta del bot no está disponible."
+                    )
+                opponent = self.bot.prepare(tx)
+                try:
+                    match_id = self.matches.create_against_bot(tx, search, opponent)
+                except ConflictError as exc:
+                    raise ServiceUnavailableError(MATCH_FAILURE) from exc
+                if self.searches.found_bot(tx, search.id, match_id) != 1:
+                    raise ServiceUnavailableError(MATCH_FAILURE)
+                self.searches.record_operation(tx, search, operation_key)
+        except (NotFoundError, ConflictError):
+            raise
+        except Exception as exc:
+            # Si el commit llegó a MySQL antes de perder la conexión, la clave
+            # duradera y la asociación de partida ya existen juntas.
+            try:
+                with self.transactions.begin() as tx:
+                    self.players.lock_players(tx, [player_id])
+                    previous = self.searches.operation(tx, player_id, operation_key)
+                    if previous is not None and previous.match_id:
+                        return previous.match_id
+            except ServiceUnavailableError:
+                pass
+            logger.warning("Falló la partida contra el bot (%s)", type(exc).__name__)
+            raise ServiceUnavailableError(
+                "No se pudo iniciar la partida contra el bot. Consulta tu búsqueda y reintenta."
+            ) from exc
+        return match_id
+
+    @staticmethod
+    def _bot_conflict(search: Search) -> ConflictError:
+        if search.match_id:
+            return ConflictError(
+                f"La búsqueda ya encontró la partida {search.match_id}.", "match_id"
+            )
+        if search.status in ("cancelled", "expired"):
+            status = "cancelada" if search.status == "cancelled" else "expirada"
+            return ConflictError(f"La búsqueda está {status}.", "search_id")
+        return ConflictError(
+            "La oferta de jugar contra el bot no está disponible.", "search_id"
+        )
 
     def get(self, player_id: str, search_id: str) -> Search:
         return self._require(self.searches.get(player_id, search_id))
-
-    def cancel(self, player_id: str, search_id: str) -> Search:
-        with self.transactions.begin() as tx:
-            self.players.lock_players(tx, [player_id])
-            return self._require(self.searches.cancel(tx, player_id, search_id))
 
     @staticmethod
     def _require(search: Search | None) -> Search:
@@ -215,7 +341,8 @@ class EloQueue:
     def match_waiting(self) -> None:
         """Lee la fila y procesa las parejas compatibles que encuentre."""
         logger.debug("Inicio del trabajo de emparejamiento clasificatorio")
-        pairs = compatible_pairs(self.searches.waiting(), self.clock.now())
+        now = self.clock.now()
+        pairs = compatible_pairs(self.searches.waiting(now - self.inactivity), now)
         logger.debug("Emparejamiento clasificatorio: %d parejas candidatas", len(pairs))
         for first, second in pairs:
             self.match_pair(first, second)
@@ -233,7 +360,11 @@ class EloQueue:
                 self.players.lock_players(
                     tx, sorted((first.player_id, second.player_id))
                 )
-                if self.searches.reserve(tx, ids) != 2:
+                cutoff = self.clock.now() - self.inactivity
+                if (
+                    self.searches.count_abandoned(tx, ids, cutoff)
+                    or self.searches.reserve(tx, ids) != 2
+                ):
                     tx.rollback()
                     logger.info("Pareja descartada por concurrencia: %s, %s", *ids)
                     return

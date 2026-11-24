@@ -2,7 +2,7 @@
 
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from dataclasses import replace
 from threading import Barrier
 from unittest.mock import Mock
@@ -13,8 +13,13 @@ from fastapi.testclient import TestClient
 from redis.exceptions import ConnectionError as RedisConnectionError
 from sqlalchemy import delete, func, insert, select, update
 
+from app.api.routers.player_searches import get_queue
 from app.business.matchmaking.elo_queue import Search
-from app.business.shared.errors import ConflictError
+from app.business.shared.errors import (
+    ConflictError,
+    NotFoundError,
+    ServiceUnavailableError,
+)
 from app.composition import build_container
 from app.main import create_app
 from app.persistence.cache.repeated_requests import RedisIdempotencyStore
@@ -141,6 +146,147 @@ def error(response, status, field=None):
     return details["message"]
 
 
+class SearchClock:
+    def __init__(self):
+        self.instant = datetime(2026, 1, 1, tzinfo=timezone.utc)
+
+    def now(self):
+        return self.instant
+
+    def advance(self, seconds):
+        self.instant += timedelta(seconds=seconds)
+
+
+def ready_for_bot(queue, player, deck):
+    clock = SearchClock()
+    queue.clock = clock
+    search, _ = queue.enter(player, deck)
+    for _ in range(4):
+        clock.advance(15)
+        queue.consult(player)
+    return search, clock
+
+
+def test_search_activity_offer_and_expiration(flow):
+    """Comprueba el límite de la oferta y la expiración a cargo del trabajo."""
+    api, queue, post, auth, players, decks, _ = flow
+    clock = SearchClock()
+    queue.clock = clock
+    error(api.get(f"{URL}/actual"), 401)
+    error(api.get(f"{URL}/actual", headers=auth()), 404)
+    original = post(decks[0][0]).json()
+    for _ in range(5):
+        clock.advance(10)
+        assert not api.get(f"{URL}/actual", headers=auth()).json()["bot_available"]
+    clock.advance(9)
+    assert not api.get(f"{URL}/actual", headers=auth()).json()["bot_available"]
+    clock.advance(1)
+    waiting = api.get(f"{URL}/actual", headers=auth()).json()
+    assert waiting["bot_available"] and waiting["wait_seconds"] == 60
+    assert waiting["created_at"] == original["created_at"]
+    clock.advance(15)
+    assert api.get(f"{URL}/actual", headers=auth()).json()["bot_available"]
+    clock.advance(16)
+    stale = api.get(f"{URL}/actual", headers=auth()).json()
+    assert stale["status"] == "waiting" and not stale["bot_available"]
+    assert queue.expire_abandoned() == 1
+    expired = api.get(f"{URL}/actual", headers=auth()).json()
+    assert expired["status"] == "expired" and not expired["bot_available"]
+    assert (
+        api.delete(f"{URL}/{original['id']}", headers=auth()).json()["status"]
+        == "expired"
+    )
+
+
+def test_tournament_search_never_offers_bot(flow):
+    api, queue, _, auth, players, decks, _ = flow
+    clock = SearchClock()
+    queue.clock = clock
+    search, _ = queue.enter(players[0], decks[0][0], mode="tournament")
+    for _ in range(5):
+        clock.advance(15)
+        assert not queue.consult(players[0])[2]
+    error(
+        api.post(
+            f"{URL}/{search.id}/bot", headers={**auth(), "Idempotency-Key": "bot"}
+        ),
+        409,
+    )
+
+
+def test_bot_creation_uses_original_deck_and_recovers_operation(flow, session_factory):
+    api, queue, _, auth, players, decks, _ = flow
+    search, _ = ready_for_bot(queue, players[0], decks[0][0])
+    path = f"{URL}/{search.id}/bot"
+    headers = {**auth(), "Idempotency-Key": "bot"}
+    error(api.post(path), 401)
+    error(api.post(path, headers=auth()), 400)
+    error(api.post(path, headers={**auth(players[1]), "Idempotency-Key": "bot"}), 404)
+    result = api.post(path, headers=headers)
+    assert result.status_code == 201, result.text
+
+    def unexpected_queue():
+        pytest.fail(
+            "El replay debe detenerse antes de resolver la fila del controlador"
+        )
+
+    api.app.dependency_overrides[get_queue] = unexpected_queue
+    try:
+        cached = api.post(path, headers=headers)
+        assert cached.status_code == 201 and cached.json() == result.json()
+        assert cached.headers["cache-control"] == "no-store"
+    finally:
+        del api.app.dependency_overrides[get_queue]
+    api.app.state.idempotency_store = InMemoryIdempotencyStore()
+    replay = api.post(path, headers=headers)
+    assert replay.status_code == 201 and replay.json() == result.json()
+    error(api.post(path, headers={**auth(), "Idempotency-Key": "another"}), 409)
+    match_id = result.json()["match_id"]
+    assert api.get(f"{URL}/actual", headers=auth()).json()["match_id"] == match_id
+    with session_factory() as session:
+        match = session.execute(select(matches).where(matches.c.id == match_id)).one()
+        entry = session.execute(
+            select(match_players).where(match_players.c.match_id == match_id)
+        ).one()
+        assert match.mode == "bot" and len(set(match.bot_card_ids)) == 12
+        assert entry.deck_id == search.deck_id and entry.card_ids == search.card_ids
+
+
+def test_bot_rolls_back_when_search_association_fails(flow, monkeypatch):
+    api, queue, _, auth, players, decks, _ = flow
+    search, _ = ready_for_bot(queue, players[0], decks[0][0])
+    path = f"{URL}/{search.id}/bot"
+    headers = {**auth(), "Idempotency-Key": "bot"}
+    with monkeypatch.context() as patch:
+        patch.setattr(queue.searches, "found_bot", Mock(return_value=0))
+        error(api.post(path, headers=headers), 503)
+    assert queue.get(players[0], search.id).status == "waiting"
+    assert queue.matches.active(players[0]) is None
+    assert api.post(path, headers=headers).status_code == 201
+
+
+def test_bot_redis_failure_before_and_after_commit(flow):
+    """Comprueba el rechazo inicial y la recuperación de una partida confirmada."""
+    api, queue, _, auth, players, decks, _ = flow
+    search, _ = ready_for_bot(queue, players[0], decks[0][0])
+    path = f"{URL}/{search.id}/bot"
+    headers = {**auth(), "Idempotency-Key": "bot"}
+    redis = Mock()
+    redis.get.side_effect = RedisConnectionError()
+    api.app.state.idempotency_store = RedisIdempotencyStore(redis)
+    error(api.post(path, headers=headers), 503)
+    assert queue.get(players[0], search.id).status == "waiting"
+    redis.get.side_effect = None
+    redis.get.return_value = None
+    redis.set.side_effect = RedisConnectionError()
+    error(api.post(path, headers=headers), 503)
+    committed = queue.get(players[0], search.id)
+    assert committed.status == "found"
+    api.app.state.idempotency_store = InMemoryIdempotencyStore()
+    retry = api.post(path, headers=headers)
+    assert retry.status_code == 201 and retry.json()["match_id"] == committed.match_id
+
+
 def test_contract_ownership_validation_order_and_identity(flow, session_factory):
     api, _, post, _, players, decks, cards = flow
     error(api.post(URL, json={}), 401)
@@ -193,8 +339,12 @@ def test_replays_conflicts_cancel_match_and_private_status(flow, session_factory
     message = error(post(decks[0][1], key="other"), 409, "deck_id")
     assert first["id"] in message and decks[0][0] in message
     error(api.get(f"{URL}/{first['id']}", headers=auth(players[1])), 404)
-    cancelled = api.post(f"{URL}/{first['id']}/cancelar", headers=auth())
+    cancelled = api.delete(f"{URL}/{first['id']}", headers=auth())
     assert cancelled.json()["status"] == "cancelled"
+    assert cancelled.json()["already_ended"] is False
+    repeated = api.delete(f"{URL}/{first['id']}", headers=auth())
+    assert repeated.status_code == 200
+    assert repeated.json() == {**cancelled.json(), "already_ended": True}
     assert post(decks[0][1], key="after-cancel").status_code == 202
     assert post(decks[1][0], player=players[1]).status_code == 202
     # El mazo que llegó a la fila conserva su composición aunque cambie la referencia.
@@ -222,9 +372,8 @@ def test_replays_conflicts_cancel_match_and_private_status(flow, session_factory
         )
         assert snapshots == [cards, cards]
     assert left["match_id"] in error(post(decks[0][0], key="after-found"), 409)
-    assert (
-        api.post(f"{URL}/{left['id']}/cancelar", headers=auth()).json()["status"]
-        == "found"
+    assert left["match_id"] in error(
+        api.delete(f"{URL}/{left['id']}", headers=auth()), 409
     )
 
 
@@ -277,7 +426,7 @@ def test_open_conflicts_in_both_directions(flow):
     _, queue, post, _, players, decks, _ = flow
     tournament, _ = queue.enter(players[0], decks[0][0], mode="tournament")
     assert tournament.id in error(post(decks[0][0]), 409)
-    queue.cancel(players[0], tournament.id)
+    queue.leave(players[0], tournament.id)
     ranked = post(decks[0][0], key="ranked").json()
     with pytest.raises(ConflictError, match=ranked["id"]):
         queue.enter(players[0], decks[0][0], mode="tournament")
@@ -312,7 +461,8 @@ def test_redis_idempotency_read_failure_rejects_before_ingress(flow):
     redis.get.side_effect = RedisConnectionError()
     api.app.state.idempotency_store = RedisIdempotencyStore(redis)
     error(post(decks[0][0]), 503)
-    assert queue.current(players[0]) is None
+    with pytest.raises(NotFoundError):
+        queue.consult(players[0])
 
 
 def test_redis_idempotency_write_failure_returns_503_and_replay_reuses_commit(flow):
@@ -323,7 +473,7 @@ def test_redis_idempotency_write_failure_returns_503_and_replay_reuses_commit(fl
     redis.set.side_effect = RedisConnectionError()
     api.app.state.idempotency_store = RedisIdempotencyStore(redis)
     error(post(decks[0][0]), 503)
-    existing = queue.current(players[0])
+    existing = queue.consult(players[0])[0]
     assert existing is not None
     api.app.state.idempotency_store = store
     replay = post(decks[0][0])
@@ -351,6 +501,118 @@ def race(first, second):
 
     with ThreadPoolExecutor(2) as pool:
         return list(pool.map(perform, (first, second)))
+
+
+@pytest.mark.parametrize(
+    "scenario", ["same_key", "other_key", "cancel", "human", "expiry"]
+)
+def test_mysql_bot_competes_for_the_same_search(mysql_flow, scenario):
+    sessions, first, second, players, decks, _ = mysql_flow
+    search, clock = ready_for_bot(first, players[0], decks[0][0])
+    second.clock = clock
+    if scenario == "cancel":
+
+        def competing():
+            return second.leave(players[0], search.id)
+
+    elif scenario == "human":
+        rival, _ = second.enter(players[1], decks[1][0])
+
+        def competing():
+            return second.match_pair(search, rival)
+
+    elif scenario == "expiry":
+        second.clock = SearchClock()
+        second.clock.instant = clock.now() + timedelta(seconds=16)
+        competing = second.expire_abandoned
+    else:
+
+        def competing():
+            return second.accept_bot(
+                players[0], search.id, "key" if scenario == "same_key" else "other"
+            )
+
+    accepted, other = race(
+        lambda: first.accept_bot(players[0], search.id, "key"), competing
+    )
+    result = first.get(players[0], search.id)
+    with sessions() as session:
+        active = session.execute(
+            select(match_players).where(match_players.c.player_id == players[0])
+        ).all()
+        if result.status == "found":
+            assert len(active) == 1 and active[0].match_id == result.match_id
+        else:
+            assert result.status in ("cancelled", "expired") and not active
+    if scenario == "same_key":
+        assert accepted == other == result.match_id
+    elif scenario == "other_key":
+        assert isinstance(accepted, ConflictError) != isinstance(other, ConflictError)
+
+
+def test_mysql_abandoned_search_cannot_be_reserved_before_expiry_job(mysql_flow):
+    """Comprueba que una búsqueda vencida quede fuera antes de expirar en MySQL."""
+    _, first, second, players, decks, _ = mysql_flow
+    clock = SearchClock()
+    first.clock = second.clock = clock
+    a, _ = first.enter(players[0], decks[0][0])
+    b, _ = first.enter(players[1], decks[1][0])
+    clock.advance(16)
+    first.match_pair(a, b)
+    assert first.matches.active(players[0]) is None
+    assert first.get(players[0], a.id).status == "waiting"
+    race(lambda: first.consult(players[0]), second.expire_abandoned)
+    assert first.get(players[0], a.id).status == "expired"
+    assert first.get(players[1], b.id).status == "expired"
+
+
+def test_mysql_bot_recovers_lost_commit_ack(mysql_flow, monkeypatch):
+    _, first, second, players, decks, _ = mysql_flow
+    search, clock = ready_for_bot(first, players[0], decks[0][0])
+    second.clock = clock
+    begin = first.transactions.begin
+
+    @contextmanager
+    def after_commit():
+        with begin() as tx:
+            yield tx
+        monkeypatch.setattr(first.transactions, "begin", begin)
+        raise ServiceUnavailableError("Confirmación perdida.")
+
+    monkeypatch.setattr(first.transactions, "begin", after_commit)
+    match_id = first.accept_bot(players[0], search.id, "key")
+    assert second.accept_bot(players[0], search.id, "key") == match_id
+    assert second.matches.active(players[0]) == match_id
+
+
+@pytest.mark.parametrize("stage", ["prepare", "create", "associate"])
+def test_mysql_bot_rollback_and_retry(mysql_flow, monkeypatch, stage):
+    sessions, first, second, players, decks, _ = mysql_flow
+    search, clock = ready_for_bot(first, players[0], decks[0][0])
+    second.clock = clock
+    component, method = {
+        "prepare": (first.bot, "prepare"),
+        "create": (first.matches, "create_against_bot"),
+        "associate": (first.searches, "found_bot"),
+    }[stage]
+
+    def fail(*args):
+        raise ServiceUnavailableError("Fallo de prueba.")
+
+    with sessions() as session:
+        before = session.scalar(select(func.count()).select_from(matches))
+    with monkeypatch.context() as patch:
+        patch.setattr(component, method, fail)
+        with pytest.raises(ServiceUnavailableError):
+            first.accept_bot(players[0], search.id, "key")
+    recovered, _, offer = second.consult(players[0])
+    assert recovered.status == "waiting" and offer
+    assert recovered.card_ids == search.card_ids
+    assert second.matches.active(players[0]) is None
+    with sessions() as session:
+        assert session.scalar(select(func.count()).select_from(matches)) == before
+    match_id = second.accept_bot(players[0], search.id, "key")
+    assert second.get(players[0], search.id).match_id == match_id
 
 
 @pytest.mark.parametrize(
@@ -406,7 +668,7 @@ def test_mysql_http_ingress_from_two_api_instances(
     assert sorted(response.status_code for response in responses) == (
         [202, 409] if different_deck else [200, 202]
     )
-    current = queue.current(players[0])
+    current = queue.consult(players[0])[0]
     for response in responses:
         if response.status_code in (200, 202):
             assert response.json()["id"] == current.id
@@ -448,17 +710,19 @@ def test_mysql_competing_workers(mysql_flow, other_rival):
 
 
 def test_mysql_cancel_racing_with_match(mysql_flow):
+    """Comprueba que solo prevalezca la cancelación o la asignación de partida."""
     _, first, second, players, decks, _ = mysql_flow
     a, b, _ = start_players(first, players, decks)
     _, cancelled = race(
-        lambda: first.match_pair(a, b), lambda: second.cancel(a.player_id, a.id)
+        lambda: first.match_pair(a, b), lambda: second.leave(a.player_id, a.id)
     )
     current = first.get(a.player_id, a.id)
     rival = first.get(b.player_id, b.id)
-    assert current == cancelled
     if current.status == "cancelled":
+        assert current == cancelled
         assert rival.status == "waiting"
     else:
+        assert isinstance(cancelled, ConflictError)
         assert (
             current.status == rival.status == "found"
             and current.match_id == rival.match_id
@@ -494,7 +758,7 @@ def test_mysql_opening_races_with_another_match_creation_flow(mysql_flow):
 def test_mysql_partial_reservation_is_rolled_back(mysql_flow):
     _, first, second, players, decks, _ = mysql_flow
     a, b, _ = start_players(first, players, decks)
-    second.cancel(a.player_id, a.id)
+    second.leave(a.player_id, a.id)
     first.match_pair(a, b)
     assert first.get(a.player_id, a.id).status == "cancelled"
     assert first.get(b.player_id, b.id).status == "waiting"

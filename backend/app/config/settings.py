@@ -41,6 +41,8 @@ class Settings(BaseSettings):
     # de tareas automáticas.
     scheduler_enabled: bool = True
     matchmaking_interval_seconds: float = Field(default=2, gt=0)
+    search_expiry_interval_seconds: float = Field(default=10, gt=0)
+    search_inactivity_seconds: int = Field(default=15, ge=1)
     search_request_limit: int = Field(default=30, ge=1)
     search_request_window_seconds: int = Field(default=60, ge=1)
     thumbnail_interval_seconds: float = 5

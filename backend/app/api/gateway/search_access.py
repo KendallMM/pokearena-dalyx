@@ -11,6 +11,7 @@ from app.api.gateway.authentication import require_player
 from app.api.gateway.idempotency import (
     IDEMPOTENCY_HEADER,
     MAX_KEY_LENGTH,
+    IdempotentReplay,
     get_idempotency_store,
 )
 from app.business.identity_access.roles import Actor
@@ -31,10 +32,11 @@ class SearchAccess:
     key_hash: str
     store: IdempotencyStore
     ttl: int
+    path: str
 
     @property
     def cache_key(self) -> str:
-        return f"{self.actor.user_id}:POST:/v1/busquedas:{self.key_hash}"
+        return f"{self.actor.user_id}:POST:{self.path}:{self.key_hash}"
 
     def previous_search(self, deck_id: str | None) -> str | None:
         """Obtiene el identificador de la búsqueda registrada para esta clave."""
@@ -51,9 +53,11 @@ class SearchAccess:
         )
         return previous.body["id"]
 
-    def respond(self, response: Response, result, *, created: bool) -> None:
+    def respond(
+        self, response: Response, result, *, created: bool, creation_status: int = 202
+    ) -> None:
         """Guarda el resultado en Redis después de confirmar la operación en MySQL."""
-        response.status_code = 202 if created else 200
+        response.status_code = creation_status if created else 200
         response.headers["Cache-Control"] = "no-store"
         try:
             self.store.save(
@@ -102,4 +106,15 @@ def require_search_access(
         sha256(operation_id.encode()).hexdigest(),
         store,
         request.app.state.settings.idempotency_ttl_seconds,
+        request.url.path,
     )
+
+
+def require_bot_access(
+    access: SearchAccess = Depends(require_search_access),
+) -> SearchAccess:
+    """Reproduce la respuesta antes de delegar una solicitud nueva al controlador."""
+    cached = access.store.get(access.cache_key)
+    if cached is not None:
+        raise IdempotentReplay(cached, no_store=True)
+    return access
