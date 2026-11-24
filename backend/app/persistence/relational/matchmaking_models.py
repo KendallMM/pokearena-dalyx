@@ -18,6 +18,7 @@ def define_matchmaking_tables(
             "created_at", sa.DateTime(), nullable=False, server_default=sa.func.now()
         ),
         sa.Column("bot_card_ids", sa.JSON(none_as_null=True)),
+        sa.Column("initial_state", sa.JSON(none_as_null=True)),
         sa.CheckConstraint(
             "mode IN ('ranked', 'tournament', 'bot')", name="ck_matches_mode"
         ),
@@ -108,4 +109,18 @@ def define_matchmaking_tables(
 
 matches, match_players, match_searches, match_search_operations = (
     define_matchmaking_tables(Base.metadata)
+)
+
+
+pending_match_events = sa.Table(
+    "pending_match_events",
+    Base.metadata,
+    sa.Column("id", sa.String(36), primary_key=True),
+    sa.Column("match_id", sa.String(36), sa.ForeignKey("matches.id"), nullable=False),
+    sa.Column("payload", sa.JSON(), nullable=False),
+    sa.Column(
+        "created_at", sa.DateTime(), nullable=False, server_default=sa.func.now()
+    ),
+    sa.Column("copied", sa.Boolean(), nullable=False, server_default=sa.false()),
+    sa.Index("ix_pending_match_events", "copied", "created_at", "id"),
 )

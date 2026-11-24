@@ -1,5 +1,9 @@
+import type { InitialMatch } from "../api/matches";
+
 /* Datos que necesita la pantalla de partida. */
 export interface MatchLocation {
+  id?: number;
+  imageMatchId?: string;
   name: string;
   effect: string;
   /* Poder de cada carta jugada en esta ubicación. */
@@ -7,16 +11,14 @@ export interface MatchLocation {
   playerCards: number[];
 }
 
-export interface HandCard {
-  name: string;
-  cost: number;
+export type HandCard = Omit<InitialMatch["hand"][number], "power"> & {
   /* null mientras no exista el dato real de la carta. */
   power: number | null;
-}
+};
 
 export interface MatchView {
-  rival: { name: string; elo: number; confirmed: boolean };
-  betCubes: number;
+  rival: { name: string; elo?: number; confirmed: boolean };
+  betCubes: number | null;
   turn: number;
   totalTurns: number;
   energy: number;

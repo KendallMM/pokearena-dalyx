@@ -29,6 +29,31 @@ class SqlCardRepository:
     def __init__(self, session_factory: sessionmaker[Session]) -> None:
         self._session_factory = session_factory
 
+    def match_versions(self, tx: Transaction, ids: set[int]) -> list[dict]:
+        query = (
+            select(
+                CardRow.id,
+                CardRow.code,
+                CardRow.name,
+                CardRow.cost,
+                CardRow.power,
+                CardRow.image_id,
+                CardTypeRow.code.label("type"),
+                CardTypeRow.name.label("type_name"),
+                RarityRow.code.label("rarity"),
+                RarityRow.name.label("rarity_name"),
+                AbilityRow.code.label("ability"),
+                AbilityRow.name.label("ability_name"),
+                AbilityRow.affected_card_type_id,
+            )
+            .join(CardTypeRow, CardRow.card_type_id == CardTypeRow.id)
+            .join(RarityRow, CardRow.rarity_id == RarityRow.id)
+            .join(AbilityRow, CardRow.ability_id == AbilityRow.id)
+            .where(CardRow.id.in_(ids))
+            .order_by(CardRow.id)
+        )
+        return [dict(row) for row in session_of(tx).execute(query).mappings()]
+
     def available_ids_by_rarity(
         self, transaction: Transaction, rarity_code: str
     ) -> list[int]:

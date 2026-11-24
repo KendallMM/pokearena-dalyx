@@ -198,6 +198,28 @@ class DeckService:
         )
         return CreatedDeck(stored.id, stored.name, cleaned_codes)
 
+    def cards_for_match(
+        self,
+        tx: Transaction,
+        player_id: str | None,
+        deck_id: str | None,
+        snapshot: list[int],
+    ) -> list[int]:
+        """Recupera el mazo humano y conserva la selección original de la búsqueda."""
+        if len(snapshot) != DECK_SIZE or repeated_cards(snapshot):
+            raise ConflictError("El deck de la partida debe tener 12 cartas distintas.")
+        if player_id is None and deck_id is None:
+            # El bot aporta un mazo transitorio, sin cuenta ni deck persistido.
+            return list(snapshot)
+        if player_id is None or deck_id is None:
+            raise ConflictError("El deck de la partida no está disponible.")
+        # La lectura confirma que existe un deck del jugador. Las cartas provienen
+        # de la selección congelada al ingresar en la búsqueda.
+        deck = self._decks.get_for(deck_id, player_id, tx=tx)
+        if deck is None:
+            raise ConflictError("El deck seleccionado ya no está disponible.")
+        return list(snapshot)
+
     def validate_for_play(
         self, tx: Transaction, player_id: str, deck_id: str
     ) -> list[int]:

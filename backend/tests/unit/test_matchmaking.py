@@ -41,7 +41,7 @@ def test_match_service_decides_which_search_allows_creation(
     searches.open_for_player.side_effect = lambda _, player: (
         open_search if player == "a" else None
     )
-    service = MatchService(repository, players, searches)
+    service = MatchService(repository, players, searches, Mock(), Mock(), Mock())
     a, b = search("a", 0), search("b", 0)
     events = Mock()
     events.attach_mock(players.lock_players, "lock")

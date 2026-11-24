@@ -23,7 +23,9 @@ from app.business.catalog.thumbnails import (
     ThumbnailRun,
 )
 from app.business.image_processing.image_processor import ImageProcessor
-from app.business.shared.ports import Clock
+from app.business.image_processing.models import StoredImage
+from app.business.shared.errors import NotFoundError
+from app.business.shared.ports import Clock, Transaction
 
 logger = logging.getLogger(__name__)
 
@@ -52,6 +54,19 @@ class LocationService:
             spec=LOCATION_IMAGE_SPEC,
             policy=thumbnail_policy,
         )
+
+    def match_versions(self, tx: Transaction) -> list[dict]:
+        """Entrega las ubicaciones disponibles para preparar una partida."""
+        return self._locations.match_versions(tx)
+
+    def match_image(self, image_id: str) -> StoredImage:
+        """Lee la imagen identificada por la versión guardada en la partida."""
+        try:
+            return self._image_store.read_original(image_id)
+        except LookupError:
+            raise NotFoundError(
+                "La imagen de la ubicación no está disponible."
+            ) from None
 
     def create_location(self, command: CreateLocation) -> StoredLocation:
         """Valida todo antes de guardar nada. La ubicación queda pendiente de miniatura."""

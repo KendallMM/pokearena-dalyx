@@ -6,6 +6,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 
 from app.api.gateway.install import install_gateway
+from app.api.routers import player_matches
 from app.api.routers.admin import card_search, cards, locations, references
 from app.api.routers import player, player_catalog, player_decks, player_searches
 from app.composition import Container, build_container
@@ -50,6 +51,7 @@ def create_app(container: Container | None = None) -> FastAPI:
     app.state.login_challenges = container.login_challenges
     app.state.token_issuer = container.token_issuer
     app.state.elo_queue = container.elo_queue
+    app.state.match_service = container.match_service
     app.state.search_limiter = container.search_limiter
     install_gateway(app)
     app.include_router(references.router)
@@ -60,6 +62,7 @@ def create_app(container: Container | None = None) -> FastAPI:
     app.include_router(player_catalog.router)
     app.include_router(player_decks.router)
     app.include_router(player_searches.router)
+    app.include_router(player_matches.router)
 
     @app.get("/health", tags=["Operación"], summary="Estado del servicio")
     def health() -> dict[str, str]:

@@ -8,6 +8,7 @@ from typing import Protocol
 from uuid import uuid4
 
 from app.business.collection.decks import DeckService
+from app.business.game.match_start import MatchPreparationError
 from app.business.game.matches import MatchService
 from app.business.matchmaking.bot import Bot
 from app.business.shared.errors import (
@@ -292,6 +293,8 @@ class EloQueue:
                 opponent = self.bot.prepare(tx)
                 try:
                     match_id = self.matches.create_against_bot(tx, search, opponent)
+                except MatchPreparationError as exc:
+                    raise ServiceUnavailableError(exc.message) from exc
                 except ConflictError as exc:
                     raise ServiceUnavailableError(MATCH_FAILURE) from exc
                 if self.searches.found_bot(tx, search.id, match_id) != 1:
@@ -311,6 +314,8 @@ class EloQueue:
             except ServiceUnavailableError:
                 pass
             logger.warning("Falló la partida contra el bot (%s)", type(exc).__name__)
+            if isinstance(exc.__cause__, MatchPreparationError):
+                raise exc
             raise ServiceUnavailableError(
                 "No se pudo iniciar la partida contra el bot. Consulta tu búsqueda y reintenta."
             ) from exc

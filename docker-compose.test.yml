@@ -15,14 +15,27 @@ services:
       timeout: 5s
       retries: 60
 
+  mongo-test:
+    image: mongo:7
+    tmpfs:
+      - /data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      interval: 2s
+      timeout: 5s
+      retries: 30
+
   backend-test:
     build:
       context: ./backend
       target: test
     environment:
+      TEST_MONGO_URL: mongodb://mongo-test:27017
       TEST_MYSQL_URL: mysql+pymysql://test:test-only-password@mysql-test:3306/pokearena_auth_test
     depends_on:
       mysql-test:
+        condition: service_healthy
+      mongo-test:
         condition: service_healthy
 
   frontend-test:

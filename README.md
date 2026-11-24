@@ -84,6 +84,22 @@ elegidas al azar en el servidor entre las cartas disponibles del catálogo, y
   jugador no vuelva a entrar.
 - Volver a entrar o dos primeros ingresos simultáneos no duplican la recompensa.
 
+### Búsqueda clasificatoria
+
+Consulta el [contrato y diseño de la búsqueda clasificatoria](backend/MATCHMAKING.md)
+para conocer la API, el algoritmo de Elo y las garantías de concurrencia.
+
+#### Prueba manual
+
+En [la aplicación](http://localhost:5173), inicia sesión con dos cuentas
+Google autorizadas, en perfiles de navegador distintos. Las cuentas nuevas
+reciben la colección inicial si hay al menos 15 cartas comunes disponibles.
+Cada jugador necesita al menos 8 cubos y estar libre de una partida activa.
+Cada jugador puede crear un deck con 12 cartas distintas de su colección
+en `/mazos/nuevo`. En `/partida`, selecciona un deck y pulsa **Buscar partida**
+en ambas sesiones. Comprueba que ambos jugadores vean el mismo identificador
+de partida.
+
 ### Pruebas aisladas, incluidas las de MySQL
 
 ```bash
