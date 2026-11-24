@@ -1,6 +1,10 @@
 """Repositorio de mazos sobre MySQL."""
 
+from contextlib import nullcontext
 from uuid import uuid4
+
+from app.business.shared.ports import Transaction
+from app.persistence.relational.transactions import session_of
 
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
@@ -65,23 +69,27 @@ class SqlDeckRepository:
     def list_for(self, player_id: str) -> list[StoredDeck]:
         return self._read(DeckRow.player_id == player_id)
 
-    def get_for(self, deck_id: str, player_id: str) -> StoredDeck | None:
-        found = self._read(DeckRow.id == deck_id, DeckRow.player_id == player_id)
+    def get_for(
+        self, deck_id: str, player_id: str, *, tx: Transaction | None = None
+    ) -> StoredDeck | None:
+        found = self._read(DeckRow.id == deck_id, DeckRow.player_id == player_id, tx=tx)
         return found[0] if found else None
 
-    def _read(self, *conditions) -> list[StoredDeck]:
+    def _read(self, *conditions, tx: Transaction | None = None) -> list[StoredDeck]:
         statement = (
             select(DeckRow.id, DeckRow.name, DeckCardRow.card_id)
-            .join(DeckCardRow, DeckCardRow.deck_id == DeckRow.id)
+            .outerjoin(DeckCardRow, DeckCardRow.deck_id == DeckRow.id)
             .where(*conditions)
             .order_by(DeckRow.created_at, DeckRow.id, DeckCardRow.card_id)
         )
         decks: dict[str, StoredDeck] = {}
         try:
-            with self._session_factory() as session:
+            context = nullcontext(session_of(tx)) if tx else self._session_factory()
+            with context as session:
                 for deck_id, name, card_id in session.execute(statement):
                     deck = decks.setdefault(deck_id, StoredDeck(deck_id, name, []))
-                    deck.card_ids.append(card_id)
+                    if card_id is not None:
+                        deck.card_ids.append(card_id)
         except SQLAlchemyError as exc:
             raise ServiceUnavailableError(
                 "No se pudieron consultar los decks. Reintenta."

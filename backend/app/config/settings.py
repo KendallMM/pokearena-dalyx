@@ -40,6 +40,9 @@ class Settings(BaseSettings):
     # Tarea automática de miniaturas (ADR-002). Los valores finales los fija el ADR
     # de tareas automáticas.
     scheduler_enabled: bool = True
+    matchmaking_interval_seconds: float = Field(default=2, gt=0)
+    search_request_limit: int = Field(default=30, ge=1)
+    search_request_window_seconds: int = Field(default=60, ge=1)
     thumbnail_interval_seconds: float = 5
     thumbnail_batch_size: int = 20
     thumbnail_lease_seconds: int = (

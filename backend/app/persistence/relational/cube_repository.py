@@ -10,6 +10,17 @@ from app.persistence.relational.transactions import session_of
 class SqlCubeRepository:
     """Implementa el puerto CubeRepository. Saldo e historial cambian juntos."""
 
+    def balance(self, tx: Transaction, player_id: str) -> int:
+        return (
+            session_of(tx)
+            .execute(
+                select(PlayerRow.cubes)
+                .where(PlayerRow.id == player_id)
+                .with_for_update()
+            )
+            .scalar_one()
+        )
+
     def credit(
         self,
         transaction: Transaction,
@@ -25,9 +36,7 @@ class SqlCubeRepository:
         session = session_of(transaction)
         # Bloquea el saldo del jugador hasta el final de la transacción, para que
         # dos movimientos simultáneos no calculen el saldo sobre el mismo valor.
-        current = session.scalar(
-            select(PlayerRow.cubes).where(PlayerRow.id == player_id).with_for_update()
-        )
+        current = self.balance(transaction, player_id)
         balance = current + amount
         session.add(
             CubeMovementRow(

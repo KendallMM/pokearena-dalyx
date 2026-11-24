@@ -15,6 +15,7 @@ from app.business.shared.errors import (
     NotAuthenticatedError,
     NotFoundError,
     PermissionDeniedError,
+    RateLimitError,
     ServiceUnavailableError,
     ValidationFailedError,
 )
@@ -60,6 +61,7 @@ STATUS_BY_ERROR: list[tuple[type[DomainError], int]] = [
     (ValidationFailedError, 400),
     (NotFoundError, 404),
     (ConflictError, 409),
+    (RateLimitError, 429),
 ]
 
 

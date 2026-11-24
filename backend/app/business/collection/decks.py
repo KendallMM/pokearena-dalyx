@@ -6,11 +6,13 @@ cantidad, repetidas y posesión. El jugador siempre sale de las credenciales.
 
 import hashlib
 from collections import Counter
+from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Protocol
+from typing import Protocol, TypeVar
 
 from app.business.catalog.content.cards.card_directory import CardDirectory
 from app.business.catalog.search.models import CardSummary
+from app.business.shared.ports import Transaction
 from app.business.shared.errors import (
     ConflictError,
     NotFoundError,
@@ -70,7 +72,9 @@ class DeckRepository(Protocol):
         """Decks de ese jugador."""
         ...
 
-    def get_for(self, deck_id: str, player_id: str) -> StoredDeck | None:
+    def get_for(
+        self, deck_id: str, player_id: str, *, tx: Transaction | None = None
+    ) -> StoredDeck | None:
         """El deck, solo si pertenece a ese jugador."""
         ...
 
@@ -78,7 +82,9 @@ class DeckRepository(Protocol):
 class DeckCollection(Protocol):
     """Repositorio de colección: qué cartas posee el jugador."""
 
-    def copies_of(self, player_id: str, card_ids: list[int]) -> dict[int, int]:
+    def copies_of(
+        self, player_id: str, card_ids: list[int], *, tx: Transaction | None = None
+    ) -> dict[int, int]:
         """Copias de esas cartas; las que no posee no aparecen."""
         ...
 
@@ -103,21 +109,55 @@ def deck_name_key(name: str) -> str:
     return hashlib.sha256(normalize_for_search(name).encode()).hexdigest()
 
 
+CardIdentifier = TypeVar("CardIdentifier", str, int)
+
+
+def has_deck_size(cards: list[CardIdentifier]) -> bool:
+    return len(cards) == DECK_SIZE
+
+
+def repeated_cards(cards: list[CardIdentifier]) -> list[CardIdentifier]:
+    return [card for card, count in Counter(cards).items() if count > 1]
+
+
+def unowned_card_positions(
+    card_ids: Sequence[int | None], owned: dict[int, int]
+) -> list[int]:
+    return [
+        position
+        for position, card_id in enumerate(card_ids)
+        if card_id is None or owned.get(card_id, 0) < 1
+    ]
+
+
 def clean_card_codes(codes: list[str]) -> list[str]:
     """Valida cantidad y repetidas, antes de consultar la base de datos."""
     cleaned = [code.strip().upper() for code in codes]
-    if len(cleaned) != DECK_SIZE:
+    if not has_deck_size(cleaned):
         raise ValidationFailedError(
             f"Un deck debe tener exactamente {DECK_SIZE} cartas; "
             f"este tiene {len(cleaned)}.",
             field="cards",
         )
-    repeated = [code for code, count in Counter(cleaned).items() if count > 1]
+    repeated = repeated_cards(cleaned)
     if repeated:
         raise ValidationFailedError(
             f"Hay cartas repetidas: {', '.join(repeated)}.", field="cards"
         )
     return cleaned
+
+
+def validate_composition(card_ids: list[int], owned: dict[int, int]) -> None:
+    if not has_deck_size(card_ids):
+        raise ValidationFailedError(
+            f"El deck debe contener exactamente {DECK_SIZE} cartas.", "deck_id"
+        )
+    if repeated_cards(card_ids):
+        raise ValidationFailedError("El deck contiene cartas repetidas.", "deck_id")
+    if unowned_card_positions(card_ids, owned):
+        raise ValidationFailedError(
+            "El deck contiene cartas que no pertenecen a tu colección.", "deck_id"
+        )
 
 
 class DeckService:
@@ -140,7 +180,12 @@ class DeckService:
         ids = self._cards.ids_by_code(cleaned_codes)
         owned = self._collection.copies_of(player_id, list(ids.values()))
         # Una carta inexistente recibe el mismo error que una que no posee.
-        missing = [code for code in cleaned_codes if ids.get(code) not in owned]
+        missing = [
+            cleaned_codes[position]
+            for position in unowned_card_positions(
+                [ids.get(code) for code in cleaned_codes], owned
+            )
+        ]
         if missing:
             raise ValidationFailedError(
                 f"No posees estas cartas: {', '.join(missing)}.", field="cards"
@@ -152,6 +197,17 @@ class DeckService:
             [ids[code] for code in cleaned_codes],
         )
         return CreatedDeck(stored.id, stored.name, cleaned_codes)
+
+    def validate_for_play(
+        self, tx: Transaction, player_id: str, deck_id: str
+    ) -> list[int]:
+        """Comprueba que el deck y sus 12 cartas distintas sean del jugador."""
+        deck = self._decks.get_for(deck_id, player_id, tx=tx)
+        if deck is None:
+            raise NotFoundError("El deck no existe.", field="deck_id")
+        copies = self._collection.copies_of(player_id, deck.card_ids, tx=tx)
+        validate_composition(deck.card_ids, copies)
+        return deck.card_ids
 
     def list_decks(self, player_id: str) -> list[Deck]:
         """Decks del jugador con sus cartas; lista vacía si no tiene."""

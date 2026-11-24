@@ -3,6 +3,9 @@
 import json
 
 from redis import Redis
+from redis.exceptions import RedisError
+
+from app.business.shared.errors import ServiceUnavailableError
 
 from app.business.shared.ports import StoredResponse
 
@@ -16,7 +19,12 @@ class RedisIdempotencyStore:
         self._client = client
 
     def get(self, key: str) -> StoredResponse | None:
-        raw = self._client.get(KEY_PREFIX + key)
+        try:
+            raw = self._client.get(KEY_PREFIX + key)
+        except RedisError as exc:
+            raise ServiceUnavailableError(
+                "No se pudo consultar la operación. Reintenta."
+            ) from exc
         if raw is None:
             return None
         data = json.loads(raw)
@@ -24,4 +32,9 @@ class RedisIdempotencyStore:
 
     def save(self, key: str, response: StoredResponse, ttl_seconds: int) -> None:
         value = json.dumps({"status_code": response.status_code, "body": response.body})
-        self._client.set(KEY_PREFIX + key, value, ex=ttl_seconds)
+        try:
+            self._client.set(KEY_PREFIX + key, value, ex=ttl_seconds)
+        except RedisError as exc:
+            raise ServiceUnavailableError(
+                "No se pudo guardar la respuesta de la operación."
+            ) from exc

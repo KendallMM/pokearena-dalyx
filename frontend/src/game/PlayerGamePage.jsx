@@ -1,6 +1,5 @@
 import { useAccount } from "../session/AccountContext";
-import { Alert } from "../ui";
-import { MatchPage } from "./MatchPage";
+import { RankedSearch } from "./RankedSearch";
 
 /**
  * App del jugador, mensaje 39: permite entrar y comunica el resultado de Colección.
@@ -8,14 +7,5 @@ import { MatchPage } from "./MatchPage";
  */
 export function PlayerGamePage() {
   const { initialCollection } = useAccount();
-  return (
-    <>
-      {initialCollection && (
-        <Alert variant="info" title="Colección inicial">
-          <p>{initialCollection.message}</p>
-        </Alert>
-      )}
-      <MatchPage />
-    </>
-  );
+  return <RankedSearch collectionMessage={initialCollection?.message} />;
 }

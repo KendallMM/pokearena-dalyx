@@ -29,6 +29,10 @@ class IdempotencyStore(Protocol):
         ...
 
 
+class RequestLimiter(Protocol):
+    def allow(self, key: str) -> bool: ...
+
+
 class Clock(Protocol):
     """Hora del servidor. Se inyecta para poder controlarla en las pruebas."""
 

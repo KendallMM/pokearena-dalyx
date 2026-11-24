@@ -30,6 +30,10 @@ class ValidationFailedError(DomainError):
     code = "validation_failed"
 
 
+class RateLimitError(DomainError):
+    code = "rate_limit_exceeded"
+
+
 class ConflictError(DomainError):
     """La operación choca con el estado actual (por ejemplo, un recurso agotado)."""
 

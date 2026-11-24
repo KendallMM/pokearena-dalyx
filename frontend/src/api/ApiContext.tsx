@@ -8,6 +8,7 @@ import { createLocationsApi, type LocationsApi } from "./locations";
 import { createPlayerCatalogApi, type PlayerCatalogApi } from "./playerCatalog";
 import { createReferencesApi, type ReferencesApi } from "./references";
 import { createSessionsApi } from "./sessions";
+import { createSearchesApi } from "./searches";
 
 /* Servicios de la API que usan las pantallas. Cada pantalla pide solo los suyos. */
 export interface ApiServices {
@@ -16,6 +17,7 @@ export interface ApiServices {
   locations: LocationsApi;
   playerCatalog: PlayerCatalogApi;
   decks: DecksApi;
+  searches: ReturnType<typeof createSearchesApi>;
   sessions: ReturnType<typeof createSessionsApi>;
 }
 
@@ -32,6 +34,7 @@ export function ApiProvider({ children }: { children: ReactNode }) {
       locations: createLocationsApi(http),
       playerCatalog: createPlayerCatalogApi(http),
       decks: createDecksApi(http),
+      searches: createSearchesApi(http),
       sessions: createSessionsApi(http),
     };
   }, [getToken]);
