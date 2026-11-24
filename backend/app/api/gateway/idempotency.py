@@ -7,7 +7,7 @@ from fastapi import Depends, FastAPI, Header, Request
 from fastapi.encoders import jsonable_encoder
 from fastapi.responses import JSONResponse
 
-from app.api.gateway.authentication import require_content_admin
+from app.api.gateway.authentication import require_content_admin, require_player
 from app.business.identity_access.roles import Actor
 from app.business.shared.errors import ValidationFailedError
 from app.business.shared.ports import IdempotencyStore, StoredResponse
@@ -54,6 +54,25 @@ def idempotency_context(
     operation_id: str | None = Header(default=None, alias=IDEMPOTENCY_HEADER),
 ) -> IdempotencyContext:
     """Busca el identificador de operación. Va después de verificar sesión y rol."""
+    return _open_context(request, actor, store, operation_id)
+
+
+def player_idempotency_context(
+    request: Request,
+    actor: Actor = Depends(require_player),
+    store: IdempotencyStore = Depends(get_idempotency_store),
+    operation_id: str | None = Header(default=None, alias=IDEMPOTENCY_HEADER),
+) -> IdempotencyContext:
+    """Igual que idempotency_context, para operaciones del jugador."""
+    return _open_context(request, actor, store, operation_id)
+
+
+def _open_context(
+    request: Request,
+    actor: Actor,
+    store: IdempotencyStore,
+    operation_id: str | None,
+) -> IdempotencyContext:
     if not operation_id or len(operation_id) > MAX_KEY_LENGTH:
         raise ValidationFailedError(
             "Falta el identificador de operación o es demasiado largo.",

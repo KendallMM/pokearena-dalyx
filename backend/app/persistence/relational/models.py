@@ -222,3 +222,28 @@ class CubeMovementRow(Base):
     reason: Mapped[str] = mapped_column(String(40))
     reference: Mapped[str] = mapped_column(String(64))
     created_at: Mapped[datetime] = mapped_column(DateTime(), server_default=func.now())
+
+
+class DeckRow(Base):
+    """Decks de cada jugador. El nombre no se repite entre sus decks."""
+
+    __tablename__ = "decks"
+    __table_args__ = (
+        UniqueConstraint("player_id", "name_key", name="uq_decks_player_name"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    player_id: Mapped[str] = mapped_column(ForeignKey("players.id"))
+    name: Mapped[str] = mapped_column(String(40))
+    # Hash del nombre sin mayúsculas, tildes ni espacios sobrantes.
+    name_key: Mapped[str] = mapped_column(String(64))
+    created_at: Mapped[datetime] = mapped_column(DateTime(), server_default=func.now())
+
+
+class DeckCardRow(Base):
+    """Cartas de un deck. La clave primaria impide repetir una carta."""
+
+    __tablename__ = "deck_cards"
+
+    deck_id: Mapped[str] = mapped_column(ForeignKey("decks.id"), primary_key=True)
+    card_id: Mapped[int] = mapped_column(ForeignKey("cards.id"), primary_key=True)

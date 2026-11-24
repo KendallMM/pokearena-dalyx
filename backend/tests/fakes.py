@@ -237,5 +237,8 @@ class FakeCardSearchRepository:
         self.calls.append((criteria, after_id, limit))
         return [card for card in self.results if card.id > after_id][:limit]
 
+    def find_ids_by_codes(self, codes):
+        return {card.code: card.id for card in self.results if card.code in codes}
+
     def find_image_id(self, code, only_available=False):
         return self.image_ids.get(code)

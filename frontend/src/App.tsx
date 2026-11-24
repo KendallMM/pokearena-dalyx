@@ -9,6 +9,9 @@ import { LoginPage } from "./auth/LoginPage";
 import { RequireAccount } from "./auth/RequireAccount";
 import { PlayerGamePage } from "./game/PlayerGamePage";
 import { CatalogPage } from "./player/catalog/CatalogPage";
+import { CreateDeckPage } from "./player/decks/CreateDeckPage";
+import { DeckDetailPage } from "./player/decks/DeckDetailPage";
+import { DecksPage } from "./player/decks/DecksPage";
 import { PlayerLayout } from "./player/PlayerLayout";
 import { GoogleCallbackPage } from "./auth/GoogleCallbackPage";
 
@@ -22,6 +25,9 @@ export function App() {
         <Route element={<PlayerLayout />}>
           <Route path="/partida" element={<PlayerGamePage />} />
           <Route path="/catalogo" element={<CatalogPage />} />
+          <Route path="/mazos" element={<DecksPage />} />
+          <Route path="/mazos/nuevo" element={<CreateDeckPage />} />
+          <Route path="/mazos/:deckId" element={<DeckDetailPage />} />
         </Route>
         <Route element={<AdminLayout />}>
           <Route path="/menu" element={<MainMenuPage />} />

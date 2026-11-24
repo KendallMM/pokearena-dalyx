@@ -8,12 +8,14 @@ from redis import Redis
 from app.api.gateway.authentication import TokenIssuer, TokenValidator
 from app.api.gateway.google_verifier import GoogleTokenVerifier
 from app.business.collection.catalog_browser import CatalogBrowser
+from app.business.collection.decks import DeckService
 from app.business.collection.initial_collection import InitialCollectionService
 from app.business.identity_access.session_service import SessionService
 from app.business.identity_access.ports import LoginChallengeStore, PlayerRepository
 from app.business.automatic_tasks.scheduler import Scheduler
 from app.business.automatic_tasks.thumbnail_job import ThumbnailJob
 from app.business.catalog.content.cards.card_availability import CardAvailability
+from app.business.catalog.content.cards.card_directory import CardDirectory
 from app.business.catalog.content.cards.card_service import CardService
 from app.business.catalog.content.locations.location_service import LocationService
 from app.business.catalog.references.reference_service import ReferenceService
@@ -35,6 +37,7 @@ from app.persistence.relational.reference_repository import SqlReferenceReposito
 from app.persistence.relational.player_repository import SqlPlayerRepository
 from app.persistence.relational.collection_repository import SqlCollectionRepository
 from app.persistence.relational.cube_repository import SqlCubeRepository
+from app.persistence.relational.deck_repository import SqlDeckRepository
 from app.persistence.relational.transactions import SqlTransactionManager
 
 
@@ -53,6 +56,7 @@ class Container:
     session_service: SessionService | None = None
     initial_collection_service: InitialCollectionService | None = None
     catalog_browser: CatalogBrowser | None = None
+    deck_service: DeckService | None = None
     players: PlayerRepository | None = None
     login_challenges: LoginChallengeStore | None = None
     token_issuer: TokenIssuer | None = None
@@ -100,9 +104,10 @@ def build_container(settings: Settings) -> Container:
         clock=clock,
         thumbnail_policy=thumbnail_policy,
     )
+    card_search_repository = SqlCardSearchRepository(session_factory)
     card_search_service = CardSearchService(
         references=reference_service,
-        cards=SqlCardSearchRepository(session_factory),
+        cards=card_search_repository,
         image_store=image_store,
     )
     scheduler = (
@@ -139,6 +144,11 @@ def build_container(settings: Settings) -> Container:
         ),
         initial_collection_service=collections,
         catalog_browser=CatalogBrowser(card_search_service, collection_repository),
+        deck_service=DeckService(
+            SqlDeckRepository(session_factory),
+            CardDirectory(card_search_repository),
+            collection_repository,
+        ),
         players=players,
         login_challenges=RedisLoginChallengeStore(redis_client),
         token_issuer=TokenIssuer(

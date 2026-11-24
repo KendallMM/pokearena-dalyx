@@ -1621,3 +1621,45 @@ h1 {
   filter: grayscale(0.7);
   opacity: 0.75;
 }
+
+/* Decks del jugador. */
+.deck-list {
+  display: grid;
+  gap: 12px;
+  margin: 2rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.deck-list__item {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1rem 1.25rem;
+  color: var(--color-text);
+  text-decoration: none;
+  background: var(--color-surface);
+  border: 4px solid var(--ink);
+  border-radius: var(--radius-card);
+}
+
+.deck-list__name {
+  font-weight: 800;
+}
+
+.deck-counter {
+  margin: 0;
+  font-weight: 800;
+}
+
+.deck-card__pick {
+  justify-self: center;
+  color: var(--color-on-page);
+}
+
+.deck-card--selected .game-card {
+  outline: 4px solid var(--color-accent);
+  outline-offset: 2px;
+}

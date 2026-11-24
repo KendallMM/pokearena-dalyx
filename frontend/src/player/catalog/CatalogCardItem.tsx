@@ -1,52 +1,13 @@
-import { useEffect, useRef, useState } from "react";
-
-import { useApi } from "../../api/ApiContext";
 import type { PlayerCatalogCard } from "../../api/types";
-import { GameCard, useObjectUrl } from "../../ui";
+import { GameCard } from "../../ui";
 import { copiesText } from "./catalogRules";
+import { useLazyCardImage } from "./useLazyCardImage";
 
-/*
- * Una carta del catálogo con la marca de cuántas copias tiene el jugador. La imagen
- * (versión grande) pide sesión, así que se descarga cuando la carta se va a ver.
- */
+/* Una carta del catálogo con la marca de cuántas copias tiene el jugador. */
 export function CatalogCardItem({ card }: { card: PlayerCatalogCard }) {
-  const { playerCatalog } = useApi();
-  const element = useRef<HTMLLIElement>(null);
-  const [visible, setVisible] = useState(false);
-  const [image, setImage] = useState<Blob | null>(null);
-  const [failed, setFailed] = useState(false);
-  const imageUrl = useObjectUrl(image);
-
-  useEffect(() => {
-    if (!element.current || typeof IntersectionObserver === "undefined") {
-      setVisible(true);
-      return;
-    }
-    const observer = new IntersectionObserver(
-      ([entry]) => {
-        if (entry?.isIntersecting) setVisible(true);
-      },
-      { rootMargin: "200px" },
-    );
-    observer.observe(element.current);
-    return () => observer.disconnect();
-  }, []);
-
-  useEffect(() => {
-    if (!visible) return;
-    let cancelled = false;
-    playerCatalog.image(card.image_url).then(
-      (blob) => {
-        if (!cancelled) setImage(blob);
-      },
-      () => {
-        if (!cancelled) setFailed(true);
-      },
-    );
-    return () => {
-      cancelled = true;
-    };
-  }, [visible, playerCatalog, card.image_url]);
+  const { element, imageUrl, imageHint } = useLazyCardImage<HTMLLIElement>(
+    card.image_url,
+  );
 
   return (
     <li
@@ -63,7 +24,7 @@ export function CatalogCardItem({ card }: { card: PlayerCatalogCard }) {
         rarityName={card.rarity.name}
         abilityName={card.ability.name}
         imageUrl={imageUrl}
-        imageHint={failed ? "No se pudo cargar la imagen" : "Cargando imagen…"}
+        imageHint={imageHint}
       />
       <p
         className={`catalog-card__copies${card.owned ? " catalog-card__copies--owned" : ""}`}
