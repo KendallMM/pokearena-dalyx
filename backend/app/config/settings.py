@@ -40,6 +40,7 @@ class Settings(BaseSettings):
     # Tarea automática de miniaturas (ADR-002). Los valores finales los fija el ADR
     # de tareas automáticas.
     scheduler_enabled: bool = True
+    match_events_interval_seconds: float = Field(default=5, gt=0)
     matchmaking_interval_seconds: float = Field(default=2, gt=0)
     search_expiry_interval_seconds: float = Field(default=10, gt=0)
     search_inactivity_seconds: int = Field(default=15, ge=1)

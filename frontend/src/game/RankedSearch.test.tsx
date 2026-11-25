@@ -75,7 +75,15 @@ it("envía un solo ingreso, consulta el resultado y mantiene fijo el deck", asyn
   });
   vi.useRealTimers();
   expect(await screen.findByText("Partida encontrada: match-1")).toBeVisible();
-  expect(api.current).toHaveBeenCalledTimes(3);
+  expect(api.current).toHaveBeenCalledTimes(2);
+  expect(screen.getByRole("region", { name: "Montaña" })).toBeVisible();
+  expect(screen.getByRole("region", { name: "Bosque" })).toBeVisible();
+  expect(screen.getByRole("region", { name: "Lago" })).toBeVisible();
+  expect(screen.getByRole("heading", { name: "Carta propia" })).toBeVisible();
+  expect(screen.getByText("Planta")).toBeVisible();
+  expect(screen.getByText("Común")).toBeVisible();
+  expect(screen.getByText("Sin Habilidad")).toBeVisible();
+  expect(screen.queryByRole("button", { name: "Confirmar" })).not.toBeInTheDocument();
   expect(screen.getByLabelText("Ruta actual")).toHaveTextContent("/partida/match-1");
   expect(screen.queryByLabelText("Deck")).not.toBeInTheDocument();
 });

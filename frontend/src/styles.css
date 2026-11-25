@@ -1298,6 +1298,15 @@ h1 {
   text-transform: uppercase;
 }
 
+.match-location__image {
+  display: block;
+  width: 100%;
+  height: clamp(4rem, 12vw, 9rem);
+  margin: 8px 0;
+  border-radius: 4px;
+  object-fit: cover;
+}
+
 .match-location__effect {
   font-size: 0.9rem;
   color: var(--match-muted);
@@ -1417,6 +1426,11 @@ h1 {
   padding: 16px 12px 20px;
   border-top: 4px solid var(--ink);
   scrollbar-color: var(--match-neutral) transparent;
+}
+
+.match-hand__illustrated {
+  flex: 0 0 clamp(9rem, 16vw, 12rem);
+  min-width: 0;
 }
 
 .match-card {

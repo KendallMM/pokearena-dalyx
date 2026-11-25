@@ -11,6 +11,8 @@ from app.business.catalog.content.locations.models import (
     PendingLocation,
     StoredLocation,
 )
+from app.business.shared.ports import Transaction
+from app.persistence.relational.transactions import session_of
 from app.persistence.relational.database import naive_utc
 from app.persistence.relational.models import LocationEffectTypeRow, LocationRow
 
@@ -20,6 +22,28 @@ class SqlLocationRepository:
 
     def __init__(self, session_factory: sessionmaker[Session]) -> None:
         self._session_factory = session_factory
+
+    def match_versions(self, tx: Transaction) -> list[dict]:
+        query = (
+            select(
+                LocationRow.id,
+                LocationRow.name,
+                LocationRow.description,
+                LocationRow.card_limit,
+                LocationRow.extra_energy_mode,
+                LocationRow.extra_energy_amount,
+                LocationRow.effect_parameters,
+                LocationRow.image_id,
+                LocationEffectTypeRow.code.label("effect_type"),
+            )
+            .outerjoin(
+                LocationEffectTypeRow,
+                LocationRow.effect_type_id == LocationEffectTypeRow.id,
+            )
+            .where(LocationRow.status == LocationStatus.AVAILABLE.value)
+            .order_by(LocationRow.id)
+        )
+        return [dict(row) for row in session_of(tx).execute(query).mappings()]
 
     def add(self, location: NewLocation) -> StoredLocation:
         with self._session_factory.begin() as session:

@@ -20,6 +20,10 @@ from app.business.automatic_tasks.scheduler import Scheduler
 from app.business.matchmaking.elo_queue import EloQueue
 from app.business.matchmaking.bot import Bot
 from app.business.game.matches import MatchService
+from app.business.game.match_start import MatchStart
+from app.business.automatic_tasks.match_events_job import MatchEventsJob
+from app.persistence.relational.match_event_repository import SqlMatchEventRepository
+from app.persistence.documents.match_events import MongoMatchHistory
 from app.persistence.cache.request_limits import RedisRequestLimiter
 from app.persistence.relational.match_repository import SqlMatchRepository
 from app.persistence.relational.search_repository import SqlSearchRepository
@@ -71,6 +75,7 @@ class Container:
     login_challenges: LoginChallengeStore | None = None
     token_issuer: TokenIssuer | None = None
     elo_queue: EloQueue | None = None
+    match_service: MatchService | None = None
     matchmaking_scheduler: Scheduler | None = None
     search_limiter: RequestLimiter | None = None
 
@@ -79,8 +84,14 @@ def build_container(settings: Settings) -> Container:
     """Arma las implementaciones reales a partir de la configuración."""
     session_factory = build_session_factory(settings.mysql_url)
     reference_service = ReferenceService(SqlReferenceRepository(session_factory))
-    images = MongoClient(settings.mongo_url)[settings.mongo_database]["images"]
-    image_store = MongoImageStore(images)
+    documents = MongoClient(settings.mongo_url)[settings.mongo_database]
+    image_store = MongoImageStore(documents["images"])
+    pending_events = SqlMatchEventRepository(session_factory)
+    events_job = MatchEventsJob(
+        pending_events,
+        MongoMatchHistory(documents["match_events"]),
+        settings.match_events_interval_seconds,
+    )
     clock = SystemClock()
     redis_client = Redis.from_url(settings.redis_url, decode_responses=True)
     players = SqlPlayerRepository(session_factory)
@@ -129,8 +140,10 @@ def build_container(settings: Settings) -> Container:
                 ThumbnailJob(card_service, "card_thumbnails"),
                 ThumbnailJob(location_service, "location_thumbnails"),
                 collections,
+                events_job,
             ],
             settings.thumbnail_interval_seconds,
+            job_intervals={events_job.name: settings.match_events_interval_seconds},
         )
         if settings.scheduler_enabled
         else None
@@ -141,10 +154,24 @@ def build_container(settings: Settings) -> Container:
         collection_repository,
     )
     searches = SqlSearchRepository(session_factory)
+    match_service = MatchService(
+        SqlMatchRepository(session_factory),
+        players,
+        searches,
+        MatchStart(
+            deck_service,
+            card_service,
+            location_service,
+            clock,
+            SystemRandomSource(),
+        ),
+        pending_events,
+        reference_service,
+    )
     elo_queue = EloQueue(
         searches,
         deck_service,
-        MatchService(SqlMatchRepository(session_factory), players, searches),
+        match_service,
         players,
         SqlCubeRepository(),
         SqlTransactionManager(session_factory),
@@ -154,6 +181,7 @@ def build_container(settings: Settings) -> Container:
     )
     return Container(
         elo_queue=elo_queue,
+        match_service=match_service,
         matchmaking_scheduler=(
             Scheduler(
                 [

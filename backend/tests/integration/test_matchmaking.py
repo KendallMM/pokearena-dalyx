@@ -1,5 +1,6 @@
 """La API usa SQLite para contratos y MySQL real para concurrencia y recuperación."""
 
+import os
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
@@ -10,6 +11,7 @@ from uuid import uuid4
 
 import pytest
 from fastapi.testclient import TestClient
+from pymongo import MongoClient
 from redis.exceptions import ConnectionError as RedisConnectionError
 from sqlalchemy import delete, func, insert, select, update
 
@@ -20,17 +22,22 @@ from app.business.shared.errors import (
     NotFoundError,
     ServiceUnavailableError,
 )
+from app.business.automatic_tasks.match_events_job import MatchEventsJob
+from app.persistence.documents.match_events import MongoMatchHistory
+from app.persistence.relational.match_event_repository import SqlMatchEventRepository
 from app.composition import build_container
 from app.main import create_app
 from app.persistence.cache.repeated_requests import RedisIdempotencyStore
 from app.persistence.cache.request_limits import RedisRequestLimiter
 from app.persistence.relational.matchmaking_models import (
     match_players,
+    pending_match_events,
     match_searches,
     matches,
 )
 from app.persistence.relational.models import (
     CardRow,
+    LocationRow,
     DeckCardRow,
     DeckRow,
     ExternalIdentityRow,
@@ -65,6 +72,19 @@ def seed(sessions):
             for i in range(12)
         ]
         session.add_all(cards)
+        session.add_all(
+            LocationRow(
+                name=f"Ubicación {batch}-{i}",
+                description="Ubicación de prueba",
+                card_limit=2,
+                extra_energy_mode="fixed",
+                extra_energy_amount=1,
+                effect_parameters={},
+                image_id=f"location-{batch}-{i}",
+                status="available",
+            )
+            for i in range(3)
+        )
         session.add_all(
             PlayerRow(id=player, name=player, email=f"{player}@test.example", cubes=8)
             for player in players
@@ -242,7 +262,46 @@ def test_bot_creation_uses_original_deck_and_recovers_operation(flow, session_fa
     assert replay.status_code == 201 and replay.json() == result.json()
     error(api.post(path, headers={**auth(), "Idempotency-Key": "another"}), 409)
     match_id = result.json()["match_id"]
-    assert api.get(f"{URL}/actual", headers=auth()).json()["match_id"] == match_id
+    current = api.get(f"{URL}/actual", headers=auth()).json()
+    assert current["match_id"] == match_id
+    assert set(current) == {
+        "id",
+        "deck_id",
+        "mode",
+        "status",
+        "created_at",
+        "match_id",
+        "error",
+        "wait_seconds",
+        "bot_available",
+    }
+    assert set(result.json()) == {"match_id"}
+    endpoint = f"/v1/partidas/{match_id}"
+    operation = api.app.openapi()["paths"]["/v1/partidas/{match_id}"]["get"]
+    assert {"200", "401", "403", "404"} <= operation["responses"].keys()
+    error(api.get(endpoint), 401)
+    error(api.get(endpoint, headers=auth(players[1])), 404)
+    board = api.get(endpoint, headers=auth())
+    assert board.status_code == 200
+    assert board.headers["cache-control"] == "private, no-store"
+    view = board.json()
+    assert set(view) == {
+        "id",
+        "mode",
+        "turn",
+        "total_turns",
+        "turn_seconds",
+        "deadline",
+        "remaining_ms",
+        "stake",
+        "energy",
+        "locations",
+        "hand",
+    }
+    assert view["mode"] == "bot" and view["stake"] is None
+    assert len(view["locations"]) == 3 and len(view["hand"]) == 4
+    assert all(set(card) == {"name", "cost", "power"} for card in view["hand"])
+    error(api.get(f"{URL}/{search.id}", headers=auth(players[1])), 404)
     with session_factory() as session:
         match = session.execute(select(matches).where(matches.c.id == match_id)).one()
         entry = session.execute(
@@ -250,6 +309,26 @@ def test_bot_creation_uses_original_deck_and_recovers_operation(flow, session_fa
         ).one()
         assert match.mode == "bot" and len(set(match.bot_card_ids)) == 12
         assert entry.deck_id == search.deck_id and entry.card_ids == search.card_ids
+
+
+def test_bot_reports_insufficient_locations_without_creating_match(
+    flow, session_factory
+):
+    api, queue, _, auth, players, decks, _ = flow
+    search, _ = ready_for_bot(queue, players[0], decks[0][0])
+    with session_factory.begin() as session:
+        session.execute(update(LocationRow).values(card_limit=0))
+    result = api.post(
+        f"{URL}/{search.id}/bot", headers={**auth(), "Idempotency-Key": "bot"}
+    )
+    assert "ubicaciones disponibles" in error(result, 503)
+    assert queue.get(players[0], search.id).status == "waiting"
+    assert queue.matches.active(players[0]) is None
+    with session_factory() as session:
+        assert session.scalar(select(func.count()).select_from(matches)) == 0
+        assert (
+            session.scalar(select(func.count()).select_from(pending_match_events)) == 0
+        )
 
 
 def test_bot_rolls_back_when_search_association_fails(flow, monkeypatch):
@@ -874,3 +953,140 @@ def test_mysql_recovers_at_each_transaction_step(mysql_flow, monkeypatch, point)
     assert left.match_id == right.match_id and not left.error and not right.error
     with sessions() as session:
         assert session.scalar(select(func.count()).select_from(matches)) == before + 1
+
+
+def test_match_start_snapshot_and_history(mysql_flow, monkeypatch):
+    mongo_url = os.getenv("TEST_MONGO_URL")
+    if not mongo_url:
+        pytest.skip("MongoDB externo no configurado")
+    sessions, first, second, players, decks, cards = mysql_flow
+    a, b = (
+        first.enter(players[0], decks[0][0])[0],
+        second.enter(players[1], decks[1][0])[0],
+    )
+    first.match_pair(a, b)
+    search = first.get(players[0], a.id)
+    assert search.status == "found"
+    match_id = search.match_id
+    with sessions.begin() as session:
+        state = session.scalar(
+            select(matches.c.initial_state).where(matches.c.id == match_id)
+        )
+        event_id, payload = session.execute(
+            select(pending_match_events.c.id, pending_match_events.c.payload).where(
+                pending_match_events.c.match_id == match_id
+            )
+        ).one()
+        session.execute(update(CardRow).where(CardRow.id == cards[0]).values(power=20))
+    assert state["turn"] == 1 and state["turn_seconds"] == 30 and state["stake"] == 4
+    assert len({location["id"] for location in state["locations"]}) == 3
+    for participant in state["participants"]:
+        order = participant["deck_order"]
+        assert sorted(order) == sorted(cards)
+        assert (
+            participant["hand"] == order[:4] and participant["draw_pile"] == order[4:]
+        )
+        assert participant["energy"] == 5 and participant["graveyard"] == []
+    assert all(card["power"] == 1 for card in state["cards"])
+    assert payload == {"type": "match_started", "state": state}
+
+    with MongoClient(mongo_url, serverSelectionTimeoutMS=2000) as client:
+        history = MongoMatchHistory(client["pokearena_test"]["match_events"])
+        outbox = SqlMatchEventRepository(sessions)
+        job = MatchEventsJob(outbox, history, 5)
+        pending = outbox.next_pending(None)
+        while pending is not None and pending.id != event_id:
+            pending = outbox.next_pending(pending)
+        assert pending is not None and pending.payload == payload
+        monkeypatch.setattr(
+            outbox, "next_pending", lambda after: pending if after is None else None
+        )
+
+        def is_copied():
+            with sessions() as session:
+                return session.scalar(
+                    select(pending_match_events.c.copied).where(
+                        pending_match_events.c.id == event_id
+                    )
+                )
+
+        with monkeypatch.context() as patch:
+            patch.setattr(
+                history,
+                "store",
+                Mock(side_effect=ServiceUnavailableError("MongoDB no respondió.")),
+            )
+            job.run()
+        assert not is_copied()
+        assert history.collection.count_documents({"_id": event_id}) == 0
+
+        with monkeypatch.context() as patch:
+            original_store = history.store
+
+            def lost_ack(event, timeout_seconds):
+                original_store(event, timeout_seconds)
+                raise ServiceUnavailableError("Confirmación de MongoDB perdida.")
+
+            patch.setattr(history, "store", lost_ack)
+            job.run()
+        assert not is_copied()
+        with monkeypatch.context() as patch:
+            patch.setattr(
+                outbox,
+                "mark_copied",
+                Mock(side_effect=ServiceUnavailableError("MySQL no respondió.")),
+            )
+            job.run()
+        assert not is_copied()
+        race(job.run, job.run)
+        assert is_copied()
+        assert history.collection.count_documents({"_id": event_id}) == 1
+        assert history.collection.find_one({"_id": event_id}) == {
+            "_id": event_id,
+            "match_id": match_id,
+            **payload,
+        }
+
+
+@pytest.mark.parametrize("stage", ["state", "event"])
+def test_mysql_match_start_rolls_back_on_state_or_event_failure(
+    mysql_flow, monkeypatch, stage
+):
+    sessions, first, second, players, decks, _ = mysql_flow
+    a, b = (
+        first.enter(players[0], decks[0][0])[0],
+        second.enter(players[1], decks[1][0])[0],
+    )
+    service = first.matches
+    repo, name = (
+        (service.repository, "save_initial_state")
+        if stage == "state"
+        else (service.outbox, "add")
+    )
+    original = getattr(repo, name)
+    attempted = []
+
+    def fail(tx, match_id, state):
+        original(tx, match_id, state)
+        attempted.append(match_id)
+        raise RuntimeError("Fallo simulado tras persistir.")
+
+    monkeypatch.setattr(repo, name, fail)
+    first.match_pair(a, b)
+    assert len(attempted) == 1
+    assert first.get(players[0], a.id).status == "waiting"
+    assert second.get(players[1], b.id).status == "waiting"
+    with sessions() as session:
+        for table, column in (
+            (matches, matches.c.id),
+            (match_players, match_players.c.match_id),
+            (pending_match_events, pending_match_events.c.match_id),
+        ):
+            assert (
+                session.scalar(
+                    select(func.count())
+                    .select_from(table)
+                    .where(column == attempted[0])
+                )
+                == 0
+            )

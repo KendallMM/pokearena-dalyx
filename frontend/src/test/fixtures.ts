@@ -68,6 +68,38 @@ export function fakeServices(): ApiServices & {
       get: vi.fn(),
       create: vi.fn().mockResolvedValue({ id: "deck-1", name: "Deck", card_codes: [] }),
     },
+    matches: {
+      locationImage: vi.fn().mockResolvedValue(new Blob()),
+      initial: vi.fn().mockImplementation(async (id: string) => ({
+        id,
+        mode: "ranked",
+        turn: 1,
+        total_turns: 6,
+        turn_seconds: 30,
+        remaining_ms: 29000,
+        deadline: "2026-01-01T00:00:30Z",
+        stake: 4,
+        energy: 2,
+        locations: [
+          { id: 1, name: "Bosque", description: "Bosque" },
+          { id: 2, name: "Lago", description: "Lago" },
+          { id: 3, name: "Montaña", description: "Montaña" },
+        ],
+        hand: [
+          {
+            name: "Carta propia",
+            cost: 1,
+            power: 2,
+            code: "PKA-PLA-001",
+            type: "PLA",
+            type_name: "Planta",
+            rarity: "COMMON",
+            rarity_name: "Común",
+            ability_name: "Sin Habilidad",
+          },
+        ],
+      })),
+    },
     searches: {
       current: vi
         .fn()

@@ -2,6 +2,8 @@
 
 import logging
 
+from app.business.shared.ports import Transaction
+
 from app.business.catalog.content.cards.card_image_spec import CARD_IMAGE_SPEC
 from app.business.catalog.content.cards.card_rules import validate_card_data
 from app.business.catalog.content.cards.models import (
@@ -48,6 +50,10 @@ class CardService:
             spec=CARD_IMAGE_SPEC,
             policy=thumbnail_policy,
         )
+
+    def match_versions(self, tx: Transaction, ids: set[int]) -> list[dict]:
+        """Entrega los datos vigentes que quedarán asociados a la partida."""
+        return self._cards.match_versions(tx, ids)
 
     def create_card(self, command: CreateCard) -> StoredCard:
         """Valida todo antes de guardar nada. La carta queda pendiente de miniatura."""

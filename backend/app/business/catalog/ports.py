@@ -42,6 +42,8 @@ class ReferenceRepository(Protocol):
 
 
 class CardRepository(Protocol):
+    def match_versions(self, tx: Transaction, ids: set[int]) -> list[dict]: ...
+
     """Guardado de cartas."""
 
     def add(self, card: NewCard) -> StoredCard:
@@ -101,6 +103,8 @@ class CardSearchRepository(Protocol):
 
 
 class LocationRepository(Protocol):
+    def match_versions(self, tx: Transaction) -> list[dict]: ...
+
     """Guardado de ubicaciones."""
 
     def add(self, location: NewLocation) -> StoredLocation:
