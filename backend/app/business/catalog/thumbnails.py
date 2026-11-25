@@ -10,6 +10,11 @@ from app.business.image_processing.image_processor import ImageProcessor
 from app.business.image_processing.models import ImageSpec
 from app.business.shared.ports import Clock
 
+# Largo máximo del último error guardado (tamaño de la columna en MySQL).
+MAX_ERROR_LENGTH = 500
+# Cada falla de miniatura suma uno al contador de intentos.
+ONE_ATTEMPT = 1
+
 logger = logging.getLogger(__name__)
 
 
@@ -118,7 +123,7 @@ class ThumbnailGenerator:
         retry_at = now + timedelta(seconds=self._policy.retry_delay_seconds)
         try:
             self._tracking.register_thumbnail_failure(
-                item.id, str(error)[:500], retry_at
+                item.id, str(error)[:MAX_ERROR_LENGTH], retry_at
             )
         except Exception:
             # Si tampoco se pudo registrar, la reserva vence sola y se reintenta.

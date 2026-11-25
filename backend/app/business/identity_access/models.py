@@ -25,3 +25,9 @@ class Player:
     role: Role
     elo: int
     cubes: int
+
+
+# Valores con los que nace una cuenta. Los 1,000 cubos llegan después, con la
+# colección inicial, como un movimiento registrado.
+INITIAL_ELO = 0
+INITIAL_CUBES = 0

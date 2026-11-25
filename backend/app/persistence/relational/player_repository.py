@@ -11,7 +11,12 @@ from sqlalchemy import select, update
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import Session, sessionmaker
 
-from app.business.identity_access.models import ExternalIdentity, Player
+from app.business.identity_access.models import (
+    INITIAL_CUBES,
+    INITIAL_ELO,
+    ExternalIdentity,
+    Player,
+)
 from app.business.identity_access.roles import Role
 from app.business.shared.errors import NotFoundError, ServiceUnavailableError
 from app.business.shared.ports import Transaction
@@ -22,6 +27,14 @@ from app.persistence.relational.models import (
     PlayerRow,
 )
 from app.persistence.relational.transactions import session_of
+
+# Estados de la entrega de la colección inicial.
+PENDING = "pending"
+DELIVERED = "delivered"
+# Cada intento de entrega suma uno al contador de intentos.
+ONE_ATTEMPT = 1
+# La entrega es de un solo jugador: el UPDATE cambia esa fila o ninguna.
+CLAIMED_DELIVERY = 1
 
 
 def to_player(row: PlayerRow) -> Player:
@@ -64,8 +77,8 @@ class SqlPlayerRepository:
                     name=identity.name,
                     email=identity.email,
                     role=Role.PLAYER.value,
-                    elo=0,
-                    cubes=0,
+                    elo=INITIAL_ELO,
+                    cubes=INITIAL_CUBES,
                 )
                 session.add(row)
                 session.flush()
@@ -129,7 +142,7 @@ class SqlPlayerRepository:
         cubes: int,
         only_if_due: bool,
     ) -> bool:
-        """Marca la entrega como hecha solo si aún está pendiente (pasos 2–5).
+        """Marca la entrega como hecha solo si aún está pendiente (pasos 4–7).
 
         El UPDATE bloquea la fila hasta el COMMIT o ROLLBACK: un ingreso
         simultáneo espera y después ya no encuentra la entrega pendiente.
@@ -137,7 +150,7 @@ class SqlPlayerRepository:
         now_utc = naive_utc(now)
         conditions = [
             InitialCollectionDeliveryRow.player_id == player_id,
-            InitialCollectionDeliveryRow.status == "pending",
+            InitialCollectionDeliveryRow.status == PENDING,
         ]
         if only_if_due:
             # Solo el planificador espera; un ingreso del jugador siempre lo intenta.
@@ -148,15 +161,15 @@ class SqlPlayerRepository:
                 update(InitialCollectionDeliveryRow)
                 .where(*conditions)
                 .values(
-                    status="delivered",
+                    status=DELIVERED,
                     delivered_at=now_utc,
                     cubes_granted=cubes,
-                    attempts=InitialCollectionDeliveryRow.attempts + 1,
+                    attempts=InitialCollectionDeliveryRow.attempts + ONE_ATTEMPT,
                 )
             )
             .rowcount
         )
-        return changed == 1
+        return changed == CLAIMED_DELIVERY
 
     def postpone_initial_delivery(self, player_id: str, until: datetime) -> None:
         """Registra un intento fallido y fija cuándo puede reintentar el planificador."""
@@ -166,10 +179,10 @@ class SqlPlayerRepository:
                     update(InitialCollectionDeliveryRow)
                     .where(
                         InitialCollectionDeliveryRow.player_id == player_id,
-                        InitialCollectionDeliveryRow.status == "pending",
+                        InitialCollectionDeliveryRow.status == PENDING,
                     )
                     .values(
-                        attempts=InitialCollectionDeliveryRow.attempts + 1,
+                        attempts=InitialCollectionDeliveryRow.attempts + ONE_ATTEMPT,
                         next_attempt_at=naive_utc(until),
                     )
                 )
@@ -186,7 +199,7 @@ class SqlPlayerRepository:
                     session.scalars(
                         select(InitialCollectionDeliveryRow.player_id)
                         .where(
-                            InitialCollectionDeliveryRow.status == "pending",
+                            InitialCollectionDeliveryRow.status == PENDING,
                             InitialCollectionDeliveryRow.next_attempt_at
                             <= naive_utc(now),
                         )

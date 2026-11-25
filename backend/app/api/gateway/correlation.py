@@ -11,6 +11,8 @@ from starlette.types import ASGIApp, Message, Receive, Scope, Send
 from app.observability.logging import correlation_id_var
 
 CORRELATION_HEADER = "X-Correlation-ID"
+# Un identificador recibido más largo se recorta para no inflar los logs.
+MAX_CORRELATION_ID_LENGTH = 64
 
 
 class CorrelationIdMiddleware:
@@ -26,7 +28,7 @@ class CorrelationIdMiddleware:
 
         headers = dict(scope["headers"])
         incoming = headers.get(CORRELATION_HEADER.lower().encode(), b"").decode()
-        correlation_id = incoming[:64] or uuid.uuid4().hex
+        correlation_id = incoming[:MAX_CORRELATION_ID_LENGTH] or uuid.uuid4().hex
         scope.setdefault("state", {})["correlation_id"] = correlation_id
         token = correlation_id_var.set(correlation_id)
 

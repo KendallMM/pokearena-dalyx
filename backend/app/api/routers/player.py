@@ -1,4 +1,4 @@
-"""Participante API del jugador: recibe HTTP y coordina los mensajes 8 y 33–38.
+"""Participante API del jugador: recibe HTTP y coordina los mensajes 8 y 33–42.
 
 Sesiones identifica al jugador, Colección entrega la recompensa y el componente
 de autenticación del gateway emite la credencial interna. Aquí se conectan esas
@@ -29,6 +29,10 @@ from app.business.shared.errors import (
 
 router = APIRouter(prefix="/v1", tags=["Jugador"])
 CHALLENGE_COOKIE = "pokearena_google_challenge"
+# Bytes aleatorios del código de un solo uso (unos 43 caracteres en base64).
+NONCE_BYTES = 32
+# Un código más largo no lo pudo generar este servidor y se rechaza sin consultar Redis.
+MAX_NONCE_LENGTH = 128
 SESSION_ERRORS = {
     400: {"model": ErrorResponse, "description": "Solicitud mal formada."},
     401: {"model": ErrorResponse, "description": "Identidad o desafío inválido."},
@@ -77,15 +81,16 @@ def create_google_challenge(
 ) -> GoogleChallengeResponse:
     """Prepara el nonce que vincula el token de Google al navegador solicitante.
 
-    Es una protección adicional al flujo numerado: todavía no autentica ni crea
-    al jugador. El POST consumirá este desafío una sola vez.
+    Diagrama Desafío de inicio de sesión, Parte A (pasos 1–14), referenciado con
+    un marco ref desde Inicio de sesión con proveedor. Todavía no autentica ni
+    crea al jugador. El POST consumirá este desafío una sola vez.
     """
     settings = request.app.state.settings
     if not settings.google_client_id:
         raise IdentityProviderUnavailableError(
             "El inicio de sesión con Google todavía no está configurado."
         )
-    nonce = secrets.token_urlsafe(32)
+    nonce = secrets.token_urlsafe(NONCE_BYTES)
     challenges.create(nonce, settings.login_challenge_seconds)
     response.set_cookie(
         CHALLENGE_COOKIE,
@@ -124,12 +129,14 @@ def sign_in_google(
     issuer: TokenIssuer = Depends(get_token_issuer),
 ) -> SessionResponse:
     """Atiende la ruta pública del mensaje 6 y coordina el flujo de acceso."""
+    # Diagrama Desafío de inicio de sesión, Parte B (pasos 15–26), entre los
+    # mensajes 7 y 8: origen, cookie y consumo del código una sola vez (GETDEL).
     nonce = request.cookies.get(CHALLENGE_COOKIE, "")
     origin = request.headers.get("origin")
     if (
         (origin and origin != request.app.state.settings.public_app_url.rstrip("/"))
         or not nonce
-        or len(nonce) > 128
+        or len(nonce) > MAX_NONCE_LENGTH
         or not challenges.consume(nonce)
     ):
         raise NotAuthenticatedError(
@@ -141,14 +148,14 @@ def sign_in_google(
     # Mensajes 34–35: la API invoca Colección, responsabilidad de su propia HU.
     # Su resultado pendiente/no disponible se comunica junto al acceso exitoso.
     delivery = collections.deliver(player.id)
-    # El saldo puede haber cambiado durante la entrega.
+    # Mensajes 36–39: el saldo puede haber cambiado durante la entrega.
     player = players.get(player.id)
-    # Mensajes 36–37: el emisor del gateway recibe la identidad interna y su rol.
+    # Mensajes 40–41: el emisor del gateway recibe la identidad interna y su rol.
     credential = issuer.issue(player)
     response.headers["Cache-Control"] = "no-store"
     response.headers["Pragma"] = "no-cache"
     response.delete_cookie(CHALLENGE_COOKIE)
-    # Mensaje 38: la app recibe JWT propio, cuenta y estado de la entrega.
+    # Mensaje 42: la app recibe JWT propio, cuenta y estado de la entrega.
     return SessionResponse(
         **asdict(credential),
         player=asdict(player),

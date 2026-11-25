@@ -1,4 +1,4 @@
-"""Participante API Gateway: emite credenciales en el mensaje 37 y las autoriza.
+"""Participante API Gateway: emite credenciales en el mensaje 41 y las autoriza.
 
 La emisión y validación usan identidad y rol internos de Poké-Arena. Las siguientes
 solicitudes se validan aquí sin volver a consultar al proveedor externo.
@@ -46,7 +46,7 @@ class TokenIssuer:
         """Representa al jugador interno y su rol, con vencimiento configurable."""
         now = datetime.now(timezone.utc)
         expires_at = now + self._lifetime
-        # Mensaje 37: sub es el ID de players, distinto del sub externo de Google.
+        # Mensaje 41: sub es el ID de players, distinto del sub externo de Google.
         # El rol procede de la cuenta persistida y define los permisos posteriores.
         token = jwt.encode(
             {

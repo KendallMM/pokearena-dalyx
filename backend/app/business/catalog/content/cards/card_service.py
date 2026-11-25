@@ -64,6 +64,9 @@ class CardService:
         image_info = self._image_processor.validate(command.image_data, CARD_IMAGE_SPEC)
 
         # Primero la imagen, luego el registro (ver ADR-002).
+        # Si MongoDB falla al guardar la imagen, save_original lanza
+        # ServiceUnavailableError (503) y el flujo se detiene aquí: nunca se llama
+        # al repositorio, así que no queda una carta en MySQL sin su imagen.
         image_id = self._image_store.save_original(
             "card", command.image_data, image_info
         )
@@ -83,6 +86,8 @@ class CardService:
                 )
             )
         except Exception:
+            # Compensación: si MySQL falla después de guardar la imagen, se borra
+            # la imagen para no dejarla huérfana y se propaga el error original.
             self._discard_image(image_id)
             raise
 

@@ -11,7 +11,7 @@ from app.api.gateway.idempotency import IdempotencyContext, idempotency_context
 from app.api.schemas.locations import LocationAcceptedResponse
 from app.business.catalog.content.locations.location_service import LocationService
 from app.business.catalog.content.locations.models import CreateLocation
-from app.business.image_processing.models import MAX_IMAGE_BYTES
+from app.business.image_processing.models import MAX_IMAGE_READ_BYTES
 from app.business.shared.errors import ValidationFailedError
 
 router = APIRouter(prefix="/admin", tags=["Administración"])
@@ -85,7 +85,7 @@ def create_location(
         )
     parameters = _parse_effect_parameters(effect_parameters)
     # Se lee un byte de más para que la lógica detecte el exceso de peso sin cargar todo.
-    image_data = image.file.read(MAX_IMAGE_BYTES + 1)
+    image_data = image.file.read(MAX_IMAGE_READ_BYTES)
 
     stored = service.create_location(
         CreateLocation(

@@ -16,6 +16,9 @@ from app.business.catalog.search.models import (
 from app.business.image_processing.models import StoredImage
 from app.business.shared.errors import NotFoundError
 
+# Se pide una carta de más para saber si existe una página siguiente.
+LOOKAHEAD = 1
+
 
 class CardSearchService:
     """Valida los criterios, consulta una página y calcula el siguiente cursor."""
@@ -70,7 +73,7 @@ class CardSearchService:
 
     def _fetch(self, criteria: CardCriteria, limit: int, last_id: int) -> CardPage:
         # Se pide una carta de más: si llega, hay una página siguiente.
-        found = self._cards.search(criteria, after_id=last_id, limit=limit + 1)
+        found = self._cards.search(criteria, after_id=last_id, limit=limit + LOOKAHEAD)
         items = found[:limit]
         has_more = len(found) > limit
         return CardPage(items=items, next_cursor=items[-1].id if has_more else None)

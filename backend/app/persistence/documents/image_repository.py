@@ -5,12 +5,24 @@ from typing import Any
 
 from bson import Binary, ObjectId
 from pymongo.collection import Collection
+from pymongo.errors import PyMongoError
 
 from app.business.image_processing.models import ImageInfo, ProcessedImage, StoredImage
+from app.business.shared.errors import ServiceUnavailableError
+
+# Proyección de MongoDB: 1 indica que el campo se incluye en el resultado.
+INCLUDE_FIELD = 1
+# Una actualización por identificador debe encontrar exactamente un documento.
+EXPECTED_MATCHES = 1
 
 
 class MongoImageStore:
-    """Implementa el puerto ImageStore."""
+    """Implementa el puerto ImageStore.
+
+    Si MongoDB no responde, cada operación lanza ServiceUnavailableError (503).
+    Así la capa de negocio detiene el flujo con un error del dominio y nunca
+    continúa como si la imagen se hubiera guardado.
+    """
 
     def __init__(self, collection: Collection) -> None:
         self._collection = collection
@@ -29,12 +41,23 @@ class MongoImageStore:
             "thumbnail": None,
             "created_at": datetime.now(timezone.utc),
         }
-        return str(self._collection.insert_one(document).inserted_id)
+        try:
+            result = self._collection.insert_one(document)
+        except PyMongoError as exc:
+            raise ServiceUnavailableError(
+                "No se pudo guardar la imagen. Reintenta."
+            ) from exc
+        return str(result.inserted_id)
 
     def read_original(self, image_id: str) -> StoredImage:
-        document = self._collection.find_one(
-            {"_id": ObjectId(image_id)}, {"original": 1}
-        )
+        try:
+            document = self._collection.find_one(
+                {"_id": ObjectId(image_id)}, {"original": INCLUDE_FIELD}
+            )
+        except PyMongoError as exc:
+            raise ServiceUnavailableError(
+                "No se pudo leer la imagen. Reintenta."
+            ) from exc
         if document is None:
             raise LookupError(f"La imagen {image_id} no existe en el almacén.")
         original = document["original"]
@@ -43,7 +66,17 @@ class MongoImageStore:
         )
 
     def save_thumbnail(self, image_id: str, thumbnail: ProcessedImage) -> None:
-        result = self._collection.update_one(
+        try:
+            result = self._update_thumbnail(image_id, thumbnail)
+        except PyMongoError as exc:
+            raise ServiceUnavailableError(
+                "No se pudo guardar la miniatura. Reintenta."
+            ) from exc
+        if result.matched_count != EXPECTED_MATCHES:
+            raise LookupError(f"La imagen {image_id} no existe en el almacén.")
+
+    def _update_thumbnail(self, image_id: str, thumbnail: ProcessedImage):
+        return self._collection.update_one(
             {"_id": ObjectId(image_id)},
             {
                 "$set": {
@@ -57,8 +90,11 @@ class MongoImageStore:
                 }
             },
         )
-        if result.matched_count != 1:
-            raise LookupError(f"La imagen {image_id} no existe en el almacén.")
 
     def delete(self, image_id: str) -> None:
-        self._collection.delete_one({"_id": ObjectId(image_id)})
+        try:
+            self._collection.delete_one({"_id": ObjectId(image_id)})
+        except PyMongoError as exc:
+            raise ServiceUnavailableError(
+                "No se pudo borrar la imagen. Reintenta."
+            ) from exc

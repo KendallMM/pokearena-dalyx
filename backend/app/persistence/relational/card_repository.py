@@ -3,6 +3,7 @@
 from datetime import datetime, timedelta
 
 from sqlalchemy import or_, select, update
+from sqlalchemy.exc import DBAPIError
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.business.catalog.content.cards.card_code import build_card_code
@@ -12,6 +13,8 @@ from app.business.catalog.content.cards.models import (
     PendingCard,
     StoredCard,
 )
+from app.business.catalog.thumbnails import MAX_ERROR_LENGTH, ONE_ATTEMPT
+from app.business.shared.errors import ServiceUnavailableError
 from app.business.shared.ports import Transaction
 from app.persistence.relational.database import naive_utc
 from app.persistence.relational.models import (
@@ -21,6 +24,9 @@ from app.persistence.relational.models import (
     RarityRow,
 )
 from app.persistence.relational.transactions import session_of
+
+# El consecutivo de cada tipo avanza de uno en uno.
+NEXT_NUMBER = 1
 
 
 class SqlCardRepository:
@@ -71,6 +77,17 @@ class SqlCardRepository:
         )
 
     def add(self, card: NewCard) -> StoredCard:
+        """Guarda la carta. Si MySQL no responde, responde 503 sin guardar nada."""
+        try:
+            return self._insert(card)
+        except DBAPIError as exc:
+            # Errores de la conexión o del motor de MySQL. Los errores del dominio
+            # (por ejemplo, el límite de 999 códigos) se propagan sin cambio.
+            raise ServiceUnavailableError(
+                "No se pudo guardar la carta. Reintenta."
+            ) from exc
+
+    def _insert(self, card: NewCard) -> StoredCard:
         # Todo ocurre en una transacción: si algo falla, el consecutivo no se consume.
         with self._session_factory.begin() as session:
             number = self._next_number(session, card.card_type)
@@ -102,7 +119,7 @@ class SqlCardRepository:
         session.execute(
             update(CardTypeRow)
             .where(CardTypeRow.code == type_code)
-            .values(last_card_number=CardTypeRow.last_card_number + 1)
+            .values(last_card_number=CardTypeRow.last_card_number + NEXT_NUMBER)
         )
         return session.scalar(
             select(CardTypeRow.last_card_number).where(CardTypeRow.code == type_code)
@@ -172,8 +189,8 @@ class SqlCardRepository:
                 update(CardRow)
                 .where(CardRow.id == card_id)
                 .values(
-                    thumbnail_attempts=CardRow.thumbnail_attempts + 1,
-                    thumbnail_last_error=error[:500],
+                    thumbnail_attempts=CardRow.thumbnail_attempts + ONE_ATTEMPT,
+                    thumbnail_last_error=error[:MAX_ERROR_LENGTH],
                     thumbnail_claimed_until=naive_utc(retry_at),
                 )
             )

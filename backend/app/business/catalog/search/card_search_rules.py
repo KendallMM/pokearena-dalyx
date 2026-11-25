@@ -13,6 +13,8 @@ from app.business.shared.text import normalize_for_search
 
 DEFAULT_LIMIT = 20
 MAX_LIMIT = 100  # acota el tamaño de cada respuesta
+MIN_LIMIT = 1
+FIRST_PAGE_CURSOR = 0  # sin cursor se empieza por el inicio del catálogo
 
 
 def build_criteria(request: CardSearchRequest) -> CardCriteria:
@@ -53,12 +55,13 @@ def build_criteria(request: CardSearchRequest) -> CardCriteria:
 def page_settings(request: CardSearchRequest) -> tuple[int, int]:
     """Devuelve (tamaño de página, cursor). El cursor 0 es el inicio del catálogo."""
     limit = DEFAULT_LIMIT if request.limit is None else request.limit
-    if not 1 <= limit <= MAX_LIMIT:
+    if not MIN_LIMIT <= limit <= MAX_LIMIT:
         raise ValidationFailedError(
-            f"El tamaño de página debe estar entre 1 y {MAX_LIMIT}.", field="limit"
+            f"El tamaño de página debe estar entre {MIN_LIMIT} y {MAX_LIMIT}.",
+            field="limit",
         )
-    last_id = 0 if request.last_id is None else request.last_id
-    if last_id < 0:
+    last_id = FIRST_PAGE_CURSOR if request.last_id is None else request.last_id
+    if last_id < FIRST_PAGE_CURSOR:
         raise ValidationFailedError("El cursor no puede ser negativo.", field="last_id")
     return limit, last_id
 

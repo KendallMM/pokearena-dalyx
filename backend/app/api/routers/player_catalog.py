@@ -155,7 +155,7 @@ def get_card_image(
     _actor: Actor = Depends(require_player),
     search: CardSearchService = Depends(get_card_search_service),
 ) -> Response:
-    # Pasos 57–68: la imagen la da Búsqueda directamente, solo de cartas Disponibles.
+    # Pasos 60–88: la imagen la da Búsqueda directamente, solo de cartas Disponibles.
     image = search.get_card_image(code, only_available=True)
     return Response(
         content=image.data,
