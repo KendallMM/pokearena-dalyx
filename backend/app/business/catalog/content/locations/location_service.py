@@ -82,6 +82,9 @@ class LocationService:
         )
 
         # Primero la imagen, luego el registro (ver ADR-002).
+        # Si MongoDB falla al guardar la imagen, save_original lanza
+        # ServiceUnavailableError (503) y el flujo se detiene aquí: nunca se llama
+        # al repositorio, así que no queda una ubicación en MySQL sin su imagen.
         image_id = self._image_store.save_original(
             "location", command.image_data, image_info
         )
@@ -100,6 +103,8 @@ class LocationService:
                 )
             )
         except Exception:
+            # Compensación: si MySQL falla después de guardar la imagen, se borra
+            # la imagen para no dejarla huérfana y se propaga el error original.
             self._discard_image(image_id)
             raise
 

@@ -16,6 +16,7 @@ from app.business.catalog.references.models import (
     Rarity,
 )
 from app.business.image_processing.models import StoredImage
+from app.business.shared.errors import ServiceUnavailableError
 from app.business.shared.ports import StoredResponse
 
 
@@ -102,8 +103,11 @@ class FakeImageStore:
         self.fail_delete = False
         self.fail_read = False
         self.fail_thumbnail_save = False
+        self.fail_save = False
 
     def save_original(self, kind, data, info) -> str:
+        if self.fail_save:
+            raise ServiceUnavailableError("No se pudo guardar la imagen. Reintenta.")
         image_id = f"img-{len(self.saved) + 1}"
         self.saved[image_id] = data
         self.events.append("image_saved")

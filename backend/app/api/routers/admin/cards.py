@@ -8,7 +8,7 @@ from app.api.gateway.idempotency import IdempotencyContext, idempotency_context
 from app.api.schemas.cards import CardAcceptedResponse
 from app.business.catalog.content.cards.card_service import CardService
 from app.business.catalog.content.cards.models import CreateCard
-from app.business.image_processing.models import MAX_IMAGE_BYTES
+from app.business.image_processing.models import MAX_IMAGE_READ_BYTES
 from app.business.shared.errors import ValidationFailedError
 
 router = APIRouter(prefix="/admin", tags=["Administración"])
@@ -50,7 +50,7 @@ def create_card(
             "Debe adjuntar la imagen de la carta.", field="image"
         )
     # Se lee un byte de más para que la lógica detecte el exceso de peso sin cargar todo.
-    image_data = image.file.read(MAX_IMAGE_BYTES + 1)
+    image_data = image.file.read(MAX_IMAGE_READ_BYTES)
 
     stored = service.create_card(
         CreateCard(

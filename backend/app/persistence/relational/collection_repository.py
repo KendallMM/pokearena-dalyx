@@ -11,6 +11,9 @@ from app.business.shared.ports import Transaction
 from app.persistence.relational.models import PlayerCardRow
 from app.persistence.relational.transactions import session_of
 
+# La colección inicial entrega una copia de cada carta.
+ONE_COPY = 1
+
 
 class SqlCollectionRepository:
     """Implementa los puertos CollectionRepository y OwnedCardsRepository."""
@@ -56,7 +59,7 @@ class SqlCollectionRepository:
         session = session_of(transaction)
         session.add_all(
             [
-                PlayerCardRow(player_id=player_id, card_id=card_id, quantity=1)
+                PlayerCardRow(player_id=player_id, card_id=card_id, quantity=ONE_COPY)
                 for card_id in card_ids
             ]
         )

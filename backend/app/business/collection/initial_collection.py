@@ -30,6 +30,9 @@ STARTER_CUBES = 1_000
 STARTER_RARITY_CODE = "COMMON"
 # Motivo con el que la entrega queda en el historial de cubos.
 STARTER_CUBES_REASON = "initial_collection"
+# El planificador reintenta una entrega fallida después de esta espera, por lotes.
+DEFAULT_RETRY_SECONDS = 60
+DEFAULT_BATCH_SIZE = 20
 
 
 class DeliveryStatus(str, Enum):
@@ -152,8 +155,8 @@ class InitialCollectionService:
         cubes: CubeRepository,
         clock: Clock,
         random: RandomSource,
-        retry_seconds: int = 60,
-        batch_size: int = 20,
+        retry_seconds: int = DEFAULT_RETRY_SECONDS,
+        batch_size: int = DEFAULT_BATCH_SIZE,
     ) -> None:
         self._transactions = transactions
         self._deliveries = deliveries
@@ -177,36 +180,38 @@ class InitialCollectionService:
             self._deliver(player_id, only_if_due=True)
 
     def _deliver(self, player_id: str, only_if_due: bool) -> DeliveryResult:
+        # Pasos 2–3: hora del servidor (puerto de reloj).
         now = self._clock.now()
         try:
             # Región crítica: una sola transacción.
             with self._transactions.begin() as transaction:
-                # Pasos 2–5: marcar la entrega como hecha solo si sigue pendiente.
+                # Pasos 4–7: marcar la entrega como hecha solo si sigue pendiente.
                 claimed = self._deliveries.claim_initial_delivery(
                     transaction, player_id, now, self._pack.cubes, only_if_due
                 )
                 if not claimed:
-                    # Pasos 6–10: ya se entregó o un ingreso simultáneo la entregó.
+                    # Pasos 8–12: ya se entregó o un ingreso simultáneo la entregó.
                     transaction.rollback()
                     return DeliveryResult.of(
                         DeliveryStatus.PENDING
                         if only_if_due
                         else DeliveryStatus.ALREADY_DELIVERED
                     )
-                # Pasos 11–16: el módulo Cartas da las Comunes disponibles.
+                # Pasos 13–18: el módulo Cartas da las Comunes disponibles.
                 candidates = self._cards.available_ids(
                     transaction, self._pack.rarity_code
                 )
-                # Pasos 22–23: el servidor elige 15 distintas al azar.
+                # Pasos 28–29: el servidor elige 15 distintas al azar.
                 chosen = self._pack.choose_cards(candidates)
                 if chosen is None:
-                    # Pasos 17–21: menos de 15 Comunes; la marca queda pendiente.
+                    # Pasos 19–22: menos de 15 Comunes; la marca queda pendiente.
+                    # Los pasos 23–27 registran el intento al salir (_postpone).
                     transaction.rollback()
                     status = DeliveryStatus.UNAVAILABLE
                 else:
-                    # Pasos 24–27: agregar las cartas a la colección.
+                    # Pasos 30–33: agregar las cartas a la colección.
                     self._collection.add_cards(transaction, player_id, chosen)
-                    # Pasos 28–31: +1,000 cubos como primer movimiento.
+                    # Pasos 34–37: +1,000 cubos como primer movimiento.
                     self._cubes.credit(
                         transaction,
                         player_id,
@@ -214,18 +219,19 @@ class InitialCollectionService:
                         self._pack.cubes_reason,
                         player_id,
                     )
-                    # Pasos 32–36: al cerrar sin errores se confirma (COMMIT).
+                    # Pasos 38–42: al cerrar sin errores se confirma (COMMIT).
                     return DeliveryResult.of(DeliveryStatus.DELIVERED)
         except ServiceUnavailableError:
-            # Pasos 37–41: falló un paso; todo se deshizo y la entrega sigue
-            # pendiente. El inicio de sesión continúa.
+            # Pasos 43–46: falló un paso; todo se deshizo y la entrega sigue
+            # pendiente (pasos 47–51). El inicio de sesión continúa.
             logger.warning("Colección inicial pendiente; se reintentará la entrega")
             status = DeliveryStatus.PENDING
         self._postpone(player_id, now)
         return DeliveryResult.of(status)
 
     def _postpone(self, player_id: str, now: datetime) -> None:
-        """Fuera de la transacción: el planificador espera antes de reintentar."""
+        """Pasos 23–26 y 47–50, fuera de la transacción: el planificador espera
+        antes de reintentar."""
         try:
             self._deliveries.postpone_initial_delivery(
                 player_id, now + timedelta(seconds=self._retry_seconds)

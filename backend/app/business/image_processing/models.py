@@ -3,6 +3,8 @@
 from dataclasses import dataclass
 
 MAX_IMAGE_BYTES = 5 * 1024 * 1024  # 5 MB
+# Se lee un byte de más para detectar el exceso de peso sin cargar todo el archivo.
+MAX_IMAGE_READ_BYTES = MAX_IMAGE_BYTES + 1
 
 
 @dataclass(frozen=True)

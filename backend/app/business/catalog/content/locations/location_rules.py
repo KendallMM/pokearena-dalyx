@@ -6,6 +6,7 @@ from app.business.shared.errors import ValidationFailedError
 MIN_CARD_LIMIT, MAX_CARD_LIMIT = 0, 5  # 0 significa que no se pueden jugar cartas
 MAX_NAME_LENGTH = 100  # límite del almacenamiento; la historia no fija uno
 MAX_DESCRIPTION_LENGTH = 500  # ídem
+MIN_EXTRA_ENERGY = 0  # una ubicación puede no dar energía extra
 
 # Monto máximo de energía extra según la modalidad (el mínimo es 0).
 MAX_EXTRA_ENERGY = {
@@ -49,9 +50,9 @@ def validate_extra_energy(mode: str, amount: int) -> ExtraEnergyMode:
             field="extra_energy_mode",
         ) from None
     maximum = MAX_EXTRA_ENERGY[energy_mode]
-    if not 0 <= amount <= maximum:
+    if not MIN_EXTRA_ENERGY <= amount <= maximum:
         raise ValidationFailedError(
-            f"El monto de energía extra debe estar entre 0 y {maximum} "
+            f"El monto de energía extra debe estar entre {MIN_EXTRA_ENERGY} y {maximum} "
             f"en la modalidad {energy_mode.value}.",
             field="extra_energy_amount",
         )

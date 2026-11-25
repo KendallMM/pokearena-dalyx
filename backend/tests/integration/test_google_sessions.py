@@ -468,7 +468,7 @@ def test_failed_delivery_rolls_back_rewards_and_completes_on_next_login(
         context: Any,
         executemany: bool,
     ) -> None:
-        # Falla en el paso 29, cuando la marca y las cartas ya se escribieron.
+        # Falla en el paso 35, cuando la marca y las cartas ya se escribieron.
         if statement.startswith("INSERT INTO cube_movements"):
             from sqlalchemy.exc import OperationalError
 

@@ -3,6 +3,7 @@
 from datetime import datetime, timedelta
 
 from sqlalchemy import or_, select, update
+from sqlalchemy.exc import DBAPIError
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.business.catalog.content.locations.models import (
@@ -11,6 +12,8 @@ from app.business.catalog.content.locations.models import (
     PendingLocation,
     StoredLocation,
 )
+from app.business.catalog.thumbnails import MAX_ERROR_LENGTH, ONE_ATTEMPT
+from app.business.shared.errors import ServiceUnavailableError
 from app.business.shared.ports import Transaction
 from app.persistence.relational.transactions import session_of
 from app.persistence.relational.database import naive_utc
@@ -46,6 +49,17 @@ class SqlLocationRepository:
         return [dict(row) for row in session_of(tx).execute(query).mappings()]
 
     def add(self, location: NewLocation) -> StoredLocation:
+        """Guarda la ubicación. Si MySQL no responde, responde 503 sin guardar nada."""
+        try:
+            return self._insert(location)
+        except DBAPIError as exc:
+            # Errores de la conexión o del motor de MySQL. Los errores del dominio
+            # se propagan sin cambio.
+            raise ServiceUnavailableError(
+                "No se pudo guardar la ubicación. Reintenta."
+            ) from exc
+
+    def _insert(self, location: NewLocation) -> StoredLocation:
         with self._session_factory.begin() as session:
             effect_type_id = None
             if location.effect_type is not None:
@@ -126,8 +140,8 @@ class SqlLocationRepository:
                 update(LocationRow)
                 .where(LocationRow.id == location_id)
                 .values(
-                    thumbnail_attempts=LocationRow.thumbnail_attempts + 1,
-                    thumbnail_last_error=error[:500],
+                    thumbnail_attempts=LocationRow.thumbnail_attempts + ONE_ATTEMPT,
+                    thumbnail_last_error=error[:MAX_ERROR_LENGTH],
                     thumbnail_claimed_until=naive_utc(retry_at),
                 )
             )

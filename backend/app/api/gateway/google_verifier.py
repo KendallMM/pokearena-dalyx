@@ -21,6 +21,15 @@ from app.business.shared.errors import (
 
 GOOGLE_JWKS_URL = "https://www.googleapis.com/oauth2/v3/certs"
 GOOGLE_ISSUERS = ["https://accounts.google.com", "accounts.google.com"]
+# Las claves públicas se vuelven a pedir al menos cada 5 minutos.
+MAX_KEYS_CACHE_SECONDS = 300
+# Un token de Google nunca llega a este tamaño; más largo se rechaza de inmediato.
+MAX_CREDENTIAL_LENGTH = 16384
+# Largos permitidos: los de las columnas de MySQL y el máximo de un correo.
+MIN_TEXT_LENGTH = 1
+MAX_SUBJECT_LENGTH = 255
+MAX_EMAIL_LENGTH = 320
+MAX_NAME_LENGTH = 100
 
 
 class GoogleJwkClient(jwt.PyJWKClient):
@@ -49,7 +58,11 @@ class GoogleJwkClient(jwt.PyJWKClient):
                     re.IGNORECASE,
                 )
                 age = max(0, int(response.headers.get("Age", "0")))
-                lifetime = max(0, min(300, int(match[1]) - age)) if match else 0
+                lifetime = (
+                    max(0, min(MAX_KEYS_CACHE_SECONDS, int(match[1]) - age))
+                    if match
+                    else 0
+                )
                 if re.search(
                     r"(?:^|,)\s*(?:no-store|no-cache)(?:,|$)",
                     cache_control,
@@ -83,7 +96,7 @@ class GoogleTokenVerifier:
                 "El inicio de sesión con Google todavía no está configurado."
             )
         try:
-            if len(credential) > 16384:
+            if len(credential) > MAX_CREDENTIAL_LENGTH:
                 raise jwt.InvalidTokenError()
             # Se lee solo la cabecera para elegir la clave; esto aún no autentica.
             header = jwt.get_unverified_header(credential)
@@ -112,7 +125,7 @@ class GoogleTokenVerifier:
             provider="google",
             subject=claims["sub"],
             email=claims["email"],
-            name=str(claims.get("name") or "Jugador")[:100],
+            name=str(claims.get("name") or "Jugador")[:MAX_NAME_LENGTH],
         )
 
     def _validate_identity(self, claims: dict[str, Any], nonce: str) -> None:
@@ -122,9 +135,9 @@ class GoogleTokenVerifier:
         authorized_party = claims.get("azp")
         if (
             not isinstance(subject, str)
-            or not 1 <= len(subject) <= 255
+            or not MIN_TEXT_LENGTH <= len(subject) <= MAX_SUBJECT_LENGTH
             or not isinstance(claims.get("email"), str)
-            or not 1 <= len(claims["email"]) <= 320
+            or not MIN_TEXT_LENGTH <= len(claims["email"]) <= MAX_EMAIL_LENGTH
             or claims.get("email_verified") is not True
             or claims["nonce"] != nonce
             or (authorized_party is not None and authorized_party != self._client_id)

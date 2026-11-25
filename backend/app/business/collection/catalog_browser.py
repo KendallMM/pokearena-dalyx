@@ -55,13 +55,13 @@ class CatalogBrowser:
     ) -> CatalogPage:
         """Una página del catálogo. Los filtros activos se cumplen a la vez; sin
         resultados devuelve una lista vacía."""
-        # Pasos 27–34: primero se validan los filtros; un error no lee la colección.
+        # Pasos 30–42: primero se validan los filtros; un error no lee la colección.
         query = self._catalog.prepare_catalog_query(request)
-        # Pasos 35–38: solo para "solo mis cartas" se leen las cartas del jugador.
+        # Pasos 43–46: solo para "solo mis cartas" se leen las cartas del jugador.
         owned_ids = self._owned.owned_copies(player_id).keys() if only_owned else None
-        # Pasos 39–44: Búsqueda devuelve la página y el siguiente cursor.
+        # Pasos 47–52: Búsqueda devuelve la página y el siguiente cursor.
         page = self._catalog.browse_catalog(query, card_ids=owned_ids)
-        # Pasos 45–48: copias de las cartas de esta página.
+        # Pasos 53–56: copias de las cartas de esta página.
         ids = [card.id for card in page.items]
         copies = self._owned.copies_of(player_id, ids) if ids else {}
         return CatalogPage(
